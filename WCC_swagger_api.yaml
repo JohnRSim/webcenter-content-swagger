@@ -48,6 +48,7 @@ paths:
       tags:
       - Files
       summary: Upload a new document
+      description: Upload a new file, creating a new document. (CHECKIN_UNIVERSAL)
       requestBody:
         required: true
         content:
@@ -57,7 +58,7 @@ paths:
               properties:
                 metadataValues:
                   type: string
-                  description: JSON string containing document metadata
+                  description: "JSON string containing document metadata. Required fields: dDocType, dDocTitle, dSecurityGroup. For folder upload, include fParentGUID"
                 primaryFile:
                   type: string
                   format: binary
@@ -69,9 +70,18 @@ paths:
               required:
               - metadataValues
               - primaryFile
+            example:
+              metadataValues: '{"dDocTitle":"Rest","dSecurityGroup":"Public","dDocType":"Document"}'
+              primaryFile: "[binary file content]"
       responses:
         '201':
-          description: Document created
+          description: Document successfully uploaded. Returns Location header with URI to get metadata
+          headers:
+            Location:
+              description: URI to get the metadata of the new document
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/files/ID14006201"
         '400':
           description: Bad Request
           content:
@@ -81,7 +91,7 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '500':
           description: Server error
           content:
@@ -93,19 +103,24 @@ paths:
       tags:
       - Files
       summary: Download document content
+      description: Download the file content for a document. (GET_FILE)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The document name
         schema:
           type: string
+        example: "ID14006201"
       - name: version
         in: query
+        description: Specific version to download (e.g. "2" for revision 2)
         schema:
           type: string
-          description: Specific version to download
+        example: "2"
       - name: rendition
         in: query
+        description: Type of rendition to download
         schema:
           type: string
           enum:
@@ -113,21 +128,34 @@ paths:
           - alternate
           - web
           - rendition:T
-          description: Type of rendition to download
+        example: "primary"
       - name: Range
         in: header
+        description: Range header for partial content requests (e.g. "bytes=0-1023")
         schema:
           type: string
-          description: Range header for partial content requests
+        example: "bytes=0-1023"
       responses:
         '200':
           description: Full content stream
           content:
-            application/octet-stream: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '206':
-          description: Partial content
+          description: Partial content (when Range header is used)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
@@ -138,16 +166,23 @@ paths:
           description: Range Not Satisfiable
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     post:
       tags:
       - Files
       summary: Upload a new revision
+      description: Uploads a new document as a new revision of an existing document. (CHECKIN_UNIVERSAL)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to add the revision to
         schema:
           type: string
+        example: "ID14006201"
       requestBody:
         required: true
         content:
@@ -157,7 +192,7 @@ paths:
               properties:
                 metadataValues:
                   type: string
-                  description: JSON string containing document metadata
+                  description: JSON string containing metadata for the revision. Fields not provided will be inherited
                 primaryFile:
                   type: string
                   format: binary
@@ -169,30 +204,51 @@ paths:
               required:
               - metadataValues
               - primaryFile
+            example:
+              metadataValues: '{"dDocTitle":"Rest Update Title"}'
+              primaryFile: "[binary file content]"
       responses:
         '201':
-          description: Revision created
+          description: Revision successfully uploaded. Returns Location header with URI to get metadata
+          headers:
+            Location:
+              description: URI to get the metadata of the new revision
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/files/ID14006201"
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/.by.did/{dID}/data:
     get:
       tags:
       - Files
       summary: Download by revision ID
+      description: Download the file content for a specific document revision by dID. (GET_FILE_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The document revision ID
         schema:
           type: string
+        example: "6205"
       - name: rendition
         in: query
+        description: Type of rendition to download
         schema:
           type: string
           enum:
@@ -200,17 +256,34 @@ paths:
           - alternate
           - web
           - rendition:T
+        example: "primary"
       - name: Range
         in: header
+        description: Range header for partial content requests
         schema:
           type: string
+        example: "bytes=0-1023"
       responses:
         '200':
           description: Full content stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '206':
-          description: Partial content
+          description: Partial content (when Range header is used)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
@@ -221,77 +294,176 @@ paths:
           description: Range Not Satisfiable
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
+    post:
+      tags:
+      - Files
+      summary: Upload revision by dID
+      description: Upload a new file as a revision using the revision ID. (CHECKIN_UNIVERSAL)
+      parameters:
+      - name: dID
+        in: path
+        required: true
+        description: The document revision ID to add the new revision to
+        schema:
+          type: string
+        example: "6205"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                metadataValues:
+                  type: string
+                  description: JSON string containing metadata for the revision
+                primaryFile:
+                  type: string
+                  format: binary
+                  description: The primary file to upload
+                alternateFile:
+                  type: string
+                  format: binary
+                  description: Optional alternate file
+              required:
+              - metadataValues
+              - primaryFile
+            example:
+              metadataValues: '{"dDocTitle":"Updated via dID"}'
+              primaryFile: "[binary file content]"
+      responses:
+        '201':
+          description: Revision successfully uploaded. Returns Location header with URI to get metadata
+          headers:
+            Location:
+              description: URI to get the metadata of the new revision
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/files/.by.did/6206"
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: User is not allowed to take this action
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/resubmitConversion:
     post:
       tags:
       - Files
       summary: Resubmit failed conversion
+      description: Resubmit a document for conversion processing. (RESUBMIT_FOR_CONVERSION)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to resubmit
         schema:
           type: string
+        example: "FAILED_DOC_001"
       - name: version
         in: query
+        description: Specific version to resubmit
         schema:
           type: string
+        example: "1"
       - name: alwaysResubmit
         in: query
+        description: If true, resubmit even if not in failed state
         schema:
           type: boolean
+        example: false
       responses:
         '202':
-          description: Accepted
+          description: Resubmission request accepted for processing
         '401':
           description: Unauthorized
         '409':
-          description: Conflict
+          description: Conflict - document is not in failed conversion state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/.by.did/{dID}/resubmitConversion:
     post:
       tags:
       - Files
       summary: Resubmit failed conversion by dID
+      description: Resubmit a document for conversion processing using revision ID. (RESUBMIT_FOR_CONVERSION_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The revision ID (dID) of the document to resubmit
         schema:
           type: string
+        example: "6205"
       responses:
         '202':
-          description: Accepted
+          description: Resubmission request accepted for processing
         '401':
           description: Unauthorized
         '409':
-          description: Conflict
+          description: Conflict - document is not in failed conversion state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/storage/.updateStorageTier:
     post:
       tags:
       - Files
       summary: Change storage tier
+      description: Update the storage tier for a document. (UPDATE_STORAGE_TIER)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document
         schema:
           type: string
+        example: "ID14006201"
       - name: storageTier
         in: query
         required: true
+        description: The target storage tier name
         schema:
           type: string
+        example: "Archive"
       - name: version
         in: query
+        description: Specific version to update
         schema:
           type: string
+        example: "1"
       responses:
         '204':
-          description: No Content
+          description: Storage tier updated successfully
         '401':
           description: Unauthorized
         '403':
@@ -299,28 +471,37 @@ paths:
         '404':
           description: Not Found
         '409':
-          description: Conflict
+          description: Conflict - tier update not allowed in current state
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/.by.did/{dID}/storage/.updateStorageTier:
     post:
       tags:
       - Files
       summary: Change storage tier by dID
+      description: Update the storage tier for a document using revision ID. (UPDATE_STORAGE_TIER_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The document revision ID
         schema:
           type: string
+        example: "6205"
       - name: storageTier
         in: query
         required: true
+        description: The target storage tier name
         schema:
           type: string
+        example: "Archive"
       responses:
         '204':
-          description: No Content
+          description: Storage tier updated successfully
         '401':
           description: Unauthorized
         '403':
@@ -336,23 +517,30 @@ paths:
       tags:
       - Files
       summary: Restore from archive
+      description: Restore an archived document for temporary access. (RESTORE_FROM_ARCHIVE)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the archived document
         schema:
           type: string
+        example: "ARCHIVED_DOC_001"
       - name: version
         in: query
+        description: Specific version to restore
         schema:
           type: string
+        example: "1"
       - name: hours
         in: query
+        description: Number of hours to keep restored (default based on server config)
         schema:
           type: integer
+        example: 24
       responses:
         '204':
-          description: No Content
+          description: Archive restore initiated successfully
         '400':
           description: Bad Request
         '401':
@@ -370,19 +558,24 @@ paths:
       tags:
       - Files
       summary: Restore from archive by dID
+      description: Restore an archived document using revision ID. (RESTORE_FROM_ARCHIVE_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The revision ID of the archived document
         schema:
           type: string
+        example: "6205"
       - name: hours
         in: query
+        description: Number of hours to keep restored
         schema:
           type: integer
+        example: 24
       responses:
         '204':
-          description: No Content
+          description: Archive restore initiated successfully
         '400':
           description: Bad Request
         '401':
@@ -399,285 +592,375 @@ paths:
     get:
       tags:
       - Files
-      summary: List work in progress
+      summary: List work in progress documents
+      description: Get the list of documents currently in work-in-progress status for the user. (GET_WORK_IN_PROGRESS)
       parameters:
       - name: fields
         in: query
+        description: Comma separated list of fields to return
         schema:
           type: string
+        example: "dDocName,dDocTitle,dStatus"
       - name: orderBy
         in: query
+        description: Sort field and order
         schema:
           type: string
+        example: "dInDate:Desc"
       - name: limit
         in: query
+        description: Maximum number of items to return
         schema:
           type: integer
+        example: 50
       - name: offset
         in: query
+        description: Pagination offset
         schema:
           type: integer
+        example: 0
       responses:
         '200':
-          description: WIP list
+          description: Successfully returned work in progress documents
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkInProgressResponse'
+              example:
+                count: 3
+                hasMore: false
+                totalResults: 3
+                limit: 50
+                offset: 0
+                items:
+                  - dDocName: "WIP_DOC_001"
+                    dID: 6301
+                    dDocTitle: "Draft Document"
+                    dStatus: "WIP"
+                    dDocAuthor: "weblogic"
         '204':
-          description: No Content
+          description: No work in progress documents found
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}:
     get:
       tags:
       - Files
       summary: Get document information
+      description: Get the document metadata for a document. (DOC_INFO_LATESTRELEASE or DOC_INFO_SIMPLE_BYREV)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to return information
         schema:
           type: string
-        description: Document name
+        example: "CREATECOPYREVISION"
+      - name: version
+        in: query
+        description: The version of the document to return information. If not provided, the latest released version is returned
+        schema:
+          type: string
+        example: "1"
+      - name: getFullInfo
+        in: query
+        description: If true, additional arrays like docInfo, wfInfo, revisionHistory, and fileInfo may be returned
+        schema:
+          type: boolean
+        example: false
       - name: fields
         in: query
-        required: false
+        description: Comma separated list of explicit fields to return. Format for arrays - docInfo.dDocName,revisionHistory.dID,wfInfo.*,root.dDocTitle
         schema:
           type: string
-        description: Comma-separated list of fields to return
+        example: "dDocName,dDocTitle,dSecurityGroup,dFormat"
       responses:
         '200':
-          description: Document information retrieved successfully
+          description: Successfully returned the metadata
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  dDocName:
-                    type: string
-                  dDocTitle:
-                    type: string
-                  dID:
-                    type: string
-                  dRevLabel:
-                    type: string
-                  dDocType:
-                    type: string
-                  dSecurityGroup:
-                    type: string
-                  dDocAccount:
-                    type: string
-                  dDocAuthor:
-                    type: string
-                  dCreateDate:
-                    type: string
-                    format: date-time
-                  dInDate:
-                    type: string
-                    format: date-time
-                  dFormat:
-                    type: string
-                  dFileSize:
-                    type: integer
-                  dStatus:
-                    type: string
-                additionalProperties: true
+                $ref: '#/components/schemas/MetadataObjectResponse'
+              example:
+                dDocName: "CREATECOPYREVISION"
+                dID: 6203
+                dDocType: "Document"
+                dDocTitle: "Rest copyRevision"
+                dRevLabel: "1"
+                dSecurityGroup: "Public"
+                dDocAuthor: "weblogic"
+                dStatus: "RELEASED"
+                dOriginalName: "exif-xmp.jpg"
+                dFormat: "image/jpeg"
+                dFileSize: 129756
+                dDocCreator: "weblogic"
+                dDocLastModifier: "weblogic"
+                dDocOwner: "weblogic"
+                dIndexedID: 6203
+                dInDate: "2024-05-21 16:08:00Z"
+                dWebExtension: "jpg"
+                dExtension: "jpg"
+                dCreateDate: "2024-05-21 16:08:00Z"
+                dRevClassID: 6203
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '404':
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     put:
       tags:
       - Files
-      summary: Update document metadata/file
+      summary: Update document metadata
+      description: Update the metadata for a document. (UPDATE_DOCINFO or UPDATE_DOCINFO_BYREV)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to update
         schema:
           type: string
+        example: "ID14006201"
       - name: version
         in: query
+        description: The version of the document to update
         schema:
           type: string
+        example: "1"
       - name: createPrimaryMetaFile
         in: query
+        description: If true, creates a meta file for primary content
         schema:
           type: boolean
+        example: false
       - name: createAlternateMetaFile
         in: query
+        description: If true, creates a meta file for alternate content
         schema:
           type: boolean
+        example: false
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MetadataChangeObjectParameter'
+            example:
+              dDocTitle: "Updated Document Title"
+              dSecurityGroup: "Public"
+              xComments: "Modified via REST API"
       responses:
         '204':
           description: Document updated successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     delete:
       tags:
       - Files
       summary: Delete document
+      description: Delete a document or specific revision. (DELETE_DOC or DELETE_BYREV)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to delete
         schema:
           type: string
+        example: "ID14006201"
       - name: version
         in: query
+        description: Specific version to delete. If not provided, all revisions are deleted
         schema:
           type: string
+        example: "1"
       responses:
         '204':
-          description: Document deleted
+          description: Document deleted successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '404':
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/.by.did/{dID}:
     get:
       tags:
       - Files
       summary: Get document information by revision ID
+      description: Get the document metadata for a specific revision by dID. (DOC_INFO_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: Document revision ID
         schema:
           type: string
-        description: Document revision ID
+        example: "6205"
       - name: fields
         in: query
-        required: false
+        description: Comma separated list of explicit fields to return
         schema:
           type: string
-        description: Comma-separated list of fields to return
+        example: "dDocName,dDocTitle,dID,dRevLabel"
       responses:
         '200':
-          description: Document information retrieved successfully
+          description: Successfully returned the metadata
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  dDocName:
-                    type: string
-                  dDocTitle:
-                    type: string
-                  dID:
-                    type: string
-                  dRevLabel:
-                    type: string
-                  dDocType:
-                    type: string
-                  dSecurityGroup:
-                    type: string
-                  dDocAccount:
-                    type: string
-                  dDocAuthor:
-                    type: string
-                  dCreateDate:
-                    type: string
-                    format: date-time
-                  dInDate:
-                    type: string
-                    format: date-time
-                  dFormat:
-                    type: string
-                  dFileSize:
-                    type: integer
-                  dStatus:
-                    type: string
-                additionalProperties: true
+                $ref: '#/components/schemas/MetadataObjectResponse'
+              example:
+                dDocName: "ID14006204"
+                dID: 6205
+                dDocType: "Document"
+                dDocTitle: "Rest Update Title"
+                dRevLabel: "2"
+                dSecurityGroup: "Public"
+                dDocAuthor: "weblogic"
+                dStatus: "RELEASED"
+                dOriginalName: "exif-xmp.jpg"
+                dFormat: "image/jpeg"
+                dFileSize: 129756
+                dIndexedID: 6205
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '404':
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     put:
       tags:
       - Files
-      summary: Update by dID
+      summary: Update document metadata by dID
+      description: Update the metadata for a specific document revision by dID. (UPDATE_DOCINFO_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The document revision ID to update
         schema:
           type: string
+        example: "6205"
       - name: createPrimaryMetaFile
         in: query
+        description: If true, creates a meta file for primary content
         schema:
           type: boolean
+        example: false
       - name: createAlternateMetaFile
         in: query
+        description: If true, creates a meta file for alternate content
         schema:
           type: boolean
+        example: false
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MetadataChangeObjectParameter'
+            example:
+              dDocTitle: "Updated via dID"
+              xComments: "Modified using revision ID"
       responses:
         '204':
           description: Document updated successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     delete:
       tags:
       - Files
       summary: Delete document revision by dID
+      description: Delete a specific document revision using its dID. (DELETE_DOC_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The document revision ID to delete
         schema:
           type: string
+        example: "6205"
       responses:
         '204': &id004
-          description: No Content
+          description: Document revision deleted successfully
         '400': &id001
           description: Bad Request
           content:
@@ -686,6 +969,10 @@ paths:
                 $ref: '#/components/schemas/GeneralErrorResponse'
         '401': &id002
           description: Unauthorized
+        '403':
+          description: User is not allowed to take this action
+        '404':
+          description: Not Found
         '500': &id003
           description: Server Error
           content:
@@ -696,173 +983,228 @@ paths:
     get:
       tags:
       - Files
-      summary: Get document versions
+      summary: Get all document versions
+      description: Get all the revision information of a document. (DOC_INFO_BY_NAME)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to return revision information
         schema:
           type: string
-        description: Document name
-      - name: limit
+        example: "ID14006204"
+      - name: fields
         in: query
-        required: false
+        description: Comma separated list of explicit fields to return. When not provided, all fields are returned
         schema:
-          type: integer
-          default: 50
-        description: Maximum number of versions to return
-      - name: offset
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 0
-        description: Pagination offset
+          type: string
+        example: "dDocName,dID,dRevLabel,dDocTitle"
       responses:
         '200':
-          description: Document versions retrieved successfully
+          description: Successfully returned the metadata for all versions
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  totalCount:
-                    type: integer
-                  versions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        dID:
-                          type: string
-                        dRevLabel:
-                          type: string
-                        dRevisionID:
-                          type: string
-                        dDocName:
-                          type: string
-                        dDocTitle:
-                          type: string
-                        dDocAuthor:
-                          type: string
-                        dInDate:
-                          type: string
-                          format: date-time
-                        dCreateDate:
-                          type: string
-                          format: date-time
-                        dStatus:
-                          type: string
-                        dFormat:
-                          type: string
-                        dFileSize:
-                          type: integer
+                $ref: '#/components/schemas/MetadataVersionsResponse'
+              example:
+                dDocName: "ID14006204"
+                dRevLabelLatest: "2"
+                count: 2
+                items:
+                  - dDocName: "ID14006204"
+                    dID: 6205
+                    dDocType: "Document"
+                    dDocTitle: "Rest Update Title"
+                    dRevLabel: "2"
+                    dSecurityGroup: "Public"
+                    dDocAuthor: "weblogic"
+                    dStatus: "RELEASED"
+                    dInDate: "2024-05-21 19:19:14Z"
+                  - dDocName: "ID14006204"
+                    dID: 6204
+                    dDocType: "Document"
+                    dDocTitle: "Rest"
+                    dRevLabel: "1"
+                    dSecurityGroup: "Public"
+                    dDocAuthor: "weblogic"
+                    dStatus: "RELEASED"
+                    dInDate: "2024-05-21 14:54:46Z"
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '404':
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/.checkout:
     post:
       tags:
       - Files
       summary: Checkout a document
+      description: Check out a document for editing, preventing others from modifying it. (DOC_CHECKOUT)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to checkout
         schema:
           type: string
+        example: "ID14006201"
       responses:
         '204':
-          description: No Content
+          description: Document checked out successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
+        '409':
+          description: Conflict - document already checked out by another user
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/.undocheckout:
     post:
       tags:
       - Files
-      summary: Reverse checkout
+      summary: Undo checkout
+      description: Cancel a checkout operation, reverting the document to its previous state. (DOC_UNDO_CHECKOUT)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to undo checkout
         schema:
           type: string
+        example: "ID14006201"
       responses:
         '204':
-          description: No Content
+          description: Checkout undone successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/capabilities:
     get:
       tags:
       - Files
       summary: Test document capabilities
+      description: Test user capabilities on a document (e.g., MOVE, COPY, DELETE). (DOC_INFO_SIMPLE)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to test
         schema:
           type: string
+        example: "ID14010605"
       - name: testedCapabilities
         in: query
         required: true
+        description: Comma-separated list of capabilities to test
         schema:
           type: string
+        example: "MOVE,COPY,DELETE"
       responses:
         '200':
-          description: Capabilities result
+          description: Successfully tested the document capabilities
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CapabilitiesResponse'
+              example:
+                count: 3
+                items:
+                  - capabilityName: "MOVE"
+                    capabilityValue: 1
+                  - capabilityName: "COPY"
+                    capabilityValue: 1
+                  - capabilityName: "DELETE"
+                    capabilityValue: 0
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /folders/{fFolderGUID}:
     get:
       tags:
       - Folders
-      summary: Retrieve folder info
+      summary: Retrieve folder information
+      description: Get metadata for a specific folder. (FLD_INFO)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
+        description: The folder GUID
         schema:
           type: string
+        example: "FLD_USER:weblogic"
       responses:
         '200':
-          description: Folder info
+          description: Successfully returned folder information
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/FolderInfoObject'
+              example:
+                fFolderGUID: "FLD_USER:weblogic"
+                fFolderName: "weblogic"
+                fFolderType: "owner"
+                fSecurityGroup: "Public"
+                fOwner: "weblogic"
+                fCreator: "weblogic"
+                fCreateDate: "2024-01-15 10:30:00Z"
+                fChildFoldersCount: 5
+                fChildFilesCount: 12
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
@@ -871,48 +1213,76 @@ paths:
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     delete:
       tags:
       - Folders
       summary: Delete a folder
+      description: Delete a folder and optionally its contents. (FLD_DELETE_FOLDER)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
+        description: The folder GUID to delete
         schema:
           type: string
+        example: "802062EE2F5EC5A3E2DAAA27B72D14CD"
       responses:
         '204':
-          description: No Content
+          description: Folder deleted successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /folders/files/{fFileGUID}:
     get:
       tags:
       - Folders
-      summary: Get file info in folder
+      summary: Get file information in folder
+      description: Get metadata for a file in a folder. (FLD_INFO)
       parameters:
       - name: fFileGUID
         in: path
         required: true
+        description: The file GUID
         schema:
           type: string
+        example: "B068546C1ED509D905EA455D0E03F70D"
       responses:
         '200':
-          description: File info
+          description: Successfully returned file information
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/FileInfoObject'
+              example:
+                fFileGUID: "B068546C1ED509D905EA455D0E03F70D"
+                fFileName: "document.pdf"
+                fSecurityGroup: "Public"
+                dDocName: "ID14006201"
+                dID: 6201
+                fCreateDate: "2024-01-15 10:30:00Z"
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
@@ -921,99 +1291,178 @@ paths:
           description: Not Found
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
     delete:
       tags:
       - Folders
-      summary: Delete file in folder
+      summary: Delete file from folder
+      description: Delete a file from a folder. (FLD_DELETE_FILE)
       parameters:
       - name: fFileGUID
         in: path
         required: true
+        description: The file GUID to delete
         schema:
           type: string
+        example: "B068546C1ED509D905EA455D0E03F70D"
       responses:
         '204':
-          description: No Content
+          description: File deleted successfully
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /folders/search/items:
     get:
       tags:
       - Folders
-      summary: Search within folders
+      summary: Search for files and folders
+      description: Search for files and folders in a folder structure. (FLD_FOLDER_SEARCH)
       parameters:
-      - name: fFolderGUID
+      - name: q
         in: query
-        required: true
+        description: The search query to search for content items. See Universal Query Format
         schema:
           type: string
-      - name: whereClause
+        example: "fSecurityGroup <matches> `Secure`"
+      - name: itemType
         in: query
+        description: Filter by item type (Folder, File, or Document)
         schema:
           type: string
+        example: "Folder"
+      - name: fields
+        in: query
+        description: A comma separated list of metadata fields to return
+        schema:
+          type: string
+        example: "fFolderGUID,fSecurityGroup,fCreateDate"
       - name: orderBy
         in: query
+        description: The sort field and sort order which will be used to arrange the filtered content items
         schema:
           type: string
+        example: "fFolderName:Asc"
       - name: limit
         in: query
+        description: The maximum number of items listed per page
         schema:
           type: integer
+          default: 20
+        example: 4
       - name: offset
         in: query
+        description: Specifies the point from which items are listed for the response
         schema:
           type: integer
+          default: 0
+        example: 0
       responses:
         '200':
-          description: Search results
+          description: Successfully returned the search results
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/FoldersSearchResultsResponse'
+              example:
+                itemType: "Folder"
+                q: " fSecurityGroup LIKE 'Secure'"
+                count: 4
+                hasMore: true
+                totalCount: 16
+                orderBy: "fFolderName:Asc"
+                offset: 0
+                limit: 4
+                startRow: 0
+                nextRow: 4
+                dataSource: "FldFolders"
+                searchEngineName: "DATABASE.METADATA.FOLDERS"
+                items:
+                  - fFolderGUID: "802062EE2F5EC5A3E2DAAA27B72D14CD"
+                    fCreateDate: "2024-07-07 12:08:50Z"
+                    fSecurityGroup: "Secure"
+                  - fFolderGUID: "81D398B26CCA513DD66AC0315F3949FD"
+                    fCreateDate: "2024-07-07 12:08:52Z"
+                    fSecurityGroup: "Secure"
         '204':
           description: No Content
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: User is not allowed to take this action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /folders/{fFolderGUID}/{dDocName}/filelinks:
     post:
       tags:
       - Folders
       summary: Create file link
+      description: Create a link to a document in a folder. (FLD_CREATE_FILE_LINK)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FLD_USER:weblogic"
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
+        example: "ID14006201"
       - name: fFileType
         in: query
         schema:
           type: string
+          enum: [soft, hard]
+        description: Link type - soft or hard
+        example: "soft"
       - name: ConflictResolutionMethod
         in: query
         schema:
           type: string
+          enum: [createUniqueName, overwrite, throwError]
+        description: How to handle conflicts if link already exists
+        example: "createUniqueName"
       responses:
         '201':
-          description: Link created
+          description: Link created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of the created file link
+              example: ".../documents/wcc/api/v1.1/folders/files/{fFileGUID}"
         '400':
           description: Bad Request
         '401':
@@ -1029,17 +1478,21 @@ paths:
       tags:
       - Folders
       summary: Test folder capabilities
+      description: Test one or more capabilities of the folder against those that the logged in user has (FLD_TEST_CAPABILITY)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FLD_USER:weblogic"
       - name: testedCapabilities
         in: query
         required: true
         schema:
           type: string
+        description: Comma-separated list of capabilities to test
+        example: "CREATE_CHILD_FOLDER,CREATE_CHILD_DOCUMENT,COPY"
       responses:
         '200':
           description: Capabilities result
@@ -1047,6 +1500,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CapabilitiesResponse'
+              example:
+                count: 3
+                items:
+                  - capabilityName: "CREATE_CHILD_FOLDER"
+                    capabilityValue: 1
+                  - capabilityName: "CREATE_CHILD_DOCUMENT"
+                    capabilityValue: 1
+                  - capabilityName: "COPY"
+                    capabilityValue: 0
         '400':
           description: Bad Request
         '401':
@@ -1060,6 +1522,7 @@ paths:
       tags:
       - Folders
       summary: Download file from folder
+      description: Download the primary file of a folder file entry. (FLD_GET_FILE)
       parameters:
       - name: fFileGUID
         in: path
@@ -1067,6 +1530,7 @@ paths:
         schema:
           type: string
         description: File GUID to download
+        example: "FFILE0000000000000001"
       - name: RevisionSelectionMethod
         in: query
         required: false
@@ -1078,15 +1542,28 @@ paths:
           - Specific
           default: Latest
         description: Revision selection method
+        example: "Latest"
       - name: dRevLabel
         in: query
         required: false
         schema:
           type: string
         description: Specific revision label (when RevisionSelectionMethod is Specific)
+        example: "1"
       responses:
         '200':
-          description: File content
+          description: File content returned as binary stream
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Attachment filename
+              example: 'attachment; filename="document.pdf"'
+            Content-Type:
+              schema:
+                type: string
+              description: MIME type of the file
+              example: "application/pdf"
           content:
             application/octet-stream:
               schema:
@@ -1107,21 +1584,32 @@ paths:
       tags:
       - PublicLinks
       summary: Create public link for file
+      description: Create a public link to share a file externally. (FLD_PUBLIC_LINK_CREATE)
       parameters:
       - name: fFileGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FFILE0000000000000001"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PublicLinkObject'
+            example:
+              dLinkExpires: "2024-12-31T23:59:59Z"
+              dLinkPassword: "secure123"
+              dLinkReadOnly: true
       responses:
         '201':
-          description: Public link created
+          description: Public link created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/publiclinks/{dLinkID}"
         '400':
           description: Bad Request
         '401':
@@ -1136,27 +1624,38 @@ paths:
       tags:
       - PublicLinks
       summary: List public links for file
+      description: Get all public links for a file. (FLD_PUBLIC_LINK_LIST)
       parameters:
       - name: fFileGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FFILE0000000000000001"
       - name: offset
         in: query
         schema:
           type: integer
+        example: 0
       - name: limit
         in: query
         schema:
           type: integer
+        example: 20
       responses:
         '200':
-          description: List of public links
+          description: Public links list retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicLinkListResponse'
+              example:
+                count: 1
+                items:
+                  - dLinkID: "PL123456"
+                    dLinkExpires: "2024-12-31T23:59:59Z"
+                    dLinkReadOnly: true
+                    dLinkURL: "https://server.com/cs/public/PL123456"
         '400':
           description: Bad Request
         '401':
@@ -1172,21 +1671,32 @@ paths:
       tags:
       - PublicLinks
       summary: Create public link for folder
+      description: Create a public link to share a folder externally. (FLD_PUBLIC_LINK_CREATE)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FLD_USER:weblogic"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PublicLinkObject'
+            example:
+              dLinkExpires: "2024-12-31T23:59:59Z"
+              dLinkPassword: "secure123"
+              dLinkReadOnly: true
       responses:
         '201':
-          description: Public link created
+          description: Public link created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/publiclinks/{dLinkID}"
         '400':
           description: Bad Request
         '401':
@@ -1201,27 +1711,38 @@ paths:
       tags:
       - PublicLinks
       summary: List public links for folder
+      description: Get all public links for a folder. (FLD_PUBLIC_LINK_LIST)
       parameters:
       - name: fFolderGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FLD_USER:weblogic"
       - name: offset
         in: query
         schema:
           type: integer
+        example: 0
       - name: limit
         in: query
         schema:
           type: integer
+        example: 20
       responses:
         '200':
-          description: List of public links
+          description: Public links list retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicLinkListResponse'
+              example:
+                count: 1
+                items:
+                  - dLinkID: "PL789012"
+                    dLinkExpires: "2024-12-31T23:59:59Z"
+                    dLinkReadOnly: true
+                    dLinkURL: "https://server.com/cs/public/PL789012"
         '400':
           description: Bad Request
         '401':
@@ -1237,19 +1758,27 @@ paths:
       tags:
       - PublicLinks
       summary: Get public link info
+      description: Get details of a specific public link. (FLD_PUBLIC_LINK_GET)
       parameters:
       - name: dLinkID
         in: path
         required: true
         schema:
           type: string
+        example: "PL123456"
       responses:
         '200':
-          description: Public link info
+          description: Public link information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicLinkResponse'
+              example:
+                dLinkID: "PL123456"
+                dLinkExpires: "2024-12-31T23:59:59Z"
+                dLinkReadOnly: true
+                dLinkURL: "https://server.com/cs/public/PL123456"
+                fFileGUID: "FFILE0000000000000001"
         '400':
           description: Bad Request
         '401':
@@ -1264,6 +1793,7 @@ paths:
       tags:
       - PublicLinks
       summary: Update public link
+      description: Update an existing public link. (FLD_PUBLIC_LINK_UPDATE)
       parameters:
       - name: dLinkID
         in: path
@@ -1271,12 +1801,16 @@ paths:
         schema:
           type: string
         description: Public link ID to update
+        example: "PL123456"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PublicLinkObject'
+            example:
+              dLinkExpires: "2025-12-31T23:59:59Z"
+              dLinkPassword: "newsecure456"
       responses:
         '204':
           description: Public link updated successfully
@@ -1294,6 +1828,7 @@ paths:
       tags:
       - PublicLinks
       summary: Delete public link
+      description: Delete a public link. (FLD_PUBLIC_LINK_DELETE)
       parameters:
       - name: dLinkID
         in: path
@@ -1301,6 +1836,7 @@ paths:
         schema:
           type: string
         description: Public link ID to delete
+        example: "PL123456"
       responses:
         '204':
           description: Public link deleted successfully
@@ -1319,6 +1855,7 @@ paths:
       tags:
       - ApplicationLinks
       summary: Create application link to file
+      description: Create an application link to a file for third-party app integration. (FLD_APP_LINK_CREATE)
       parameters:
       - name: fFileGUID
         in: path
@@ -1326,15 +1863,25 @@ paths:
         schema:
           type: string
         description: File GUID to create application link for
+        example: "FFILE0000000000000001"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApplicationLinkObject'
+            example:
+              dAppName: "DocumentEditor"
+              dAppLinkExpires: "2024-12-31T23:59:59Z"
+              dAppLinkScope: "read,write"
       responses:
         '201':
           description: Application link created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/applinks/{dAppLinkID}"
         '400':
           description: Bad Request
         '401':
@@ -1350,6 +1897,7 @@ paths:
       tags:
       - ApplicationLinks
       summary: Create application link to folder
+      description: Create an application link to a folder for third-party app integration. (FLD_APP_LINK_CREATE)
       parameters:
       - name: fFolderGUID
         in: path
@@ -1357,15 +1905,25 @@ paths:
         schema:
           type: string
         description: Folder GUID to create application link for
+        example: "FLD_USER:weblogic"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApplicationLinkObject'
+            example:
+              dAppName: "FolderSync"
+              dAppLinkExpires: "2024-12-31T23:59:59Z"
+              dAppLinkScope: "read"
       responses:
         '201':
           description: Application link created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/applinks/{dAppLinkID}"
         '400':
           description: Bad Request
         '401':
@@ -1381,21 +1939,30 @@ paths:
       tags:
       - ApplicationLinks
       summary: Refresh applink access token
+      description: Refresh the access token for an application link. (FLD_APP_LINK_REFRESH_TOKEN)
       parameters:
       - name: dAppLinkID
         in: path
         required: true
         schema:
           type: string
+        example: "AL123456"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AppLinkRefreshObject'
+            example:
+              refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
       responses:
         '201':
-          description: Token refreshed
+          description: Token refreshed successfully
+          content:
+            application/json:
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                expiresIn: 3600
         '400':
           description: Bad Request
         '401':
@@ -1409,60 +1976,136 @@ paths:
       tags:
       - Search
       summary: Search documents
+      description: Search for documents in the server. (GET_SEARCH_RESULTS)
       parameters:
       - name: q
         in: query
+        description: The search query to search for content items. See Universal Query Format
         schema:
           type: string
-          description: Search query
+        example: "dSecurityGroup <matches> `Public`"
       - name: fields
         in: query
+        description: The names of metadata fields to be returned for each content item
         schema:
           type: string
-          description: Comma-separated list of fields to return
+        example: "dDocName,dDocTitle,dSecurityGroup"
       - name: orderBy
         in: query
+        description: The sort field and sort order which will be used to arrange the filtered content items
         schema:
           type: string
+        example: "dInDate:Desc"
       - name: limit
         in: query
+        description: The maximum number of items listed per page
         schema:
           type: integer
+          default: 20
+        example: 20
       - name: offset
         in: query
+        description: Specifies the point from which items are listed for the response
         schema:
           type: integer
+          default: 0
+        example: 0
       responses:
         '200':
-          description: Search results
+          description: Successfully returned the search results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchResponse'
+                $ref: '#/components/schemas/SearchResultsResponse'
+              example:
+                totalResults: 5
+                query: "dSecurityGroup <matches> `Public`"
+                offset: 0
+                limit: 20
+                count: 5
+                hasMore: false
+                pageNumber: 1
+                sortOrder: "dInDate:Desc"
+                items:
+                  - dDocName: "ID14006204"
+                    dID: 6205
+                    dDocType: "Document"
+                    dDocTitle: "Rest Update Title"
+                    dRevLabel: "2"
+                    dSecurityGroup: "Public"
+                    dDocAuthor: "weblogic"
+                    dStatus: "Released"
+                    dOriginalName: "exif-xmp.jpg"
+                    dFormat: "image/jpeg"
+                    dFileSize: 129756
+                    dDocCreatedDate: "2024-05-21 19:18:39Z"
+                    dDocCreator: "weblogic"
+                    dDocLastModifiedDate: "2024-05-21 19:24:04Z"
+                    dDocLastModifier: "weblogic"
+                    dIndexedID: 6205
+                    dDocOwner: "weblogic"
+                    URL: "/cs/groups/public/documents/document/yje0/mda2/~edisp/id14006204.jpg"
+                    VaultFileSize: 129756
+                    dInDate: "2024-05-21 19:19:14Z"
+                    dWebExtension: "jpg"
+                    dExtension: "jpg"
+                    dCreateDate: "2024-05-21 19:19:14Z"
+                    dRevClassID: 6204
+                    dRevisionID: 2
+                  - dDocName: "ID14006002"
+                    dID: 6002
+                    dDocType: "Document"
+                    dDocTitle: "Rest"
+                    dRevLabel: "1"
+                    dSecurityGroup: "Public"
+                    dDocAuthor: "weblogic"
+                    dStatus: "Released"
+                    dOriginalName: "Mugs.jpg"
+                    dFormat: "image/jpeg"
+                    dFileSize: 53834
+                    URL: "/cs/groups/public/documents/document/yje0/mda2/~edisp/id14006002.jpg"
         '204':
           description: No Content
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /.bulk/.delete:
     post:
       tags:
       - BackgroundJobs
       summary: Start bulk delete job
+      description: Start a background job to delete multiple documents. (INIT_BACKGROUND_JOB)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BackgroundJobRequestObject'
+            example:
+              items:
+                - dDocName: "ID14006201"
+                - dDocName: "ID14006202"
       responses:
         '202':
-          description: Job started
+          description: Bulk delete job started successfully
+          content:
+            application/json:
+              example:
+                dJobID: "JOB123456"
+                status: "started"
         '400':
           description: Bad Request
         '401':
@@ -1474,15 +2117,26 @@ paths:
       tags:
       - BackgroundJobs
       summary: Start bulk download job
+      description: Start a background job to download multiple documents as a package. (INIT_BACKGROUND_JOB)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BackgroundJobRequestObject'
+            example:
+              items:
+                - dDocName: "ID14006201"
+                - dDocName: "ID14006202"
+              packageFormat: "zip"
       responses:
         '202':
-          description: Job started
+          description: Bulk download job started successfully
+          content:
+            application/json:
+              example:
+                dJobID: "JOB789012"
+                status: "started"
         '400':
           description: Bad Request
         '401':
@@ -1494,15 +2148,26 @@ paths:
       tags:
       - BackgroundJobs
       summary: Start bulk add category job
+      description: Start a background job to add categories to multiple documents. (INIT_BACKGROUND_JOB)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BackgroundCategoryActionRequestObject'
+            example:
+              items:
+                - dDocName: "ID14006201"
+                - dDocName: "ID14006202"
+              categoryGUID: "CAT_GUID_12345"
       responses:
         '202':
-          description: Job started
+          description: Bulk add category job started successfully
+          content:
+            application/json:
+              example:
+                dJobID: "JOB345678"
+                status: "started"
         '400':
           description: Bad Request
         '401':
@@ -1516,15 +2181,26 @@ paths:
       tags:
       - BackgroundJobs
       summary: Start bulk remove category job
+      description: Start a background job to remove categories from multiple documents. (INIT_BACKGROUND_JOB)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BackgroundCategoryActionRequestObject'
+            example:
+              items:
+                - dDocName: "ID14006201"
+                - dDocName: "ID14006202"
+              categoryGUID: "CAT_GUID_12345"
       responses:
         '202':
-          description: Job started
+          description: Bulk remove category job started successfully
+          content:
+            application/json:
+              example:
+                dJobID: "JOB901234"
+                status: "started"
         '400':
           description: Bad Request
         '401':
@@ -1538,6 +2214,7 @@ paths:
       tags:
       - BackgroundJobs
       summary: Start bulk copy category job
+      description: Start a background job to copy a category structure. (INIT_BACKGROUND_JOB)
       requestBody:
         required: true
         content:
@@ -1566,9 +2243,14 @@ paths:
               required:
               - sourceCategoryGUID
               - targetCategoryGUID
+            example:
+              sourceCategoryGUID: "CAT_GUID_12345"
+              targetCategoryGUID: "CAT_GUID_67890"
+              includeSubcategories: true
+              conflictResolution: "rename"
       responses:
         '202':
-          description: Copy category job started
+          description: Copy category job started successfully
           content:
             application/json:
               schema:
@@ -1577,6 +2259,9 @@ paths:
                   dJobID:
                     type: string
                     description: Job ID for tracking
+              example:
+                dJobID: "JOB567890"
+                status: "started"
         '400':
           description: Bad Request
         '401':
@@ -1590,15 +2275,17 @@ paths:
       tags:
       - BackgroundJobs
       summary: Cancel a background job
+      description: Cancel a running background job. (CANCEL_BACKGROUND_JOB)
       parameters:
       - name: dJobID
         in: path
         required: true
         schema:
           type: string
+        example: "JOB123456"
       responses:
         '202':
-          description: Canceled request sent
+          description: Cancel request sent successfully
         '401':
           description: Unauthorized
         '404':
@@ -1610,19 +2297,28 @@ paths:
       tags:
       - BackgroundJobs
       summary: Get status of a background job
+      description: Get the current status and progress of a background job. (STATUS_BACKGROUND_JOB)
       parameters:
       - name: dJobID
         in: path
         required: true
         schema:
           type: string
+        example: "JOB123456"
       responses:
         '200':
-          description: Job status
+          description: Job status retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BackgroundJobStatus'
+              example:
+                dJobID: "JOB123456"
+                status: "running"
+                progress: 65
+                totalItems: 100
+                processedItems: 65
+                startTime: "2024-01-15T10:00:00Z"
         '401':
           description: Unauthorized
         '404':
@@ -1634,6 +2330,7 @@ paths:
       tags:
       - BackgroundJobs
       summary: Download background job result file
+      description: Download the result package from a completed bulk download job. (GET_FILE)
       parameters:
       - name: dJobID
         in: path
@@ -1641,9 +2338,15 @@ paths:
         schema:
           type: string
         description: Job ID
+        example: "JOB789012"
       responses:
         '200':
-          description: Background job result file
+          description: Background job result file downloaded successfully
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="bulk_download_JOB789012.zip"'
           content:
             application/octet-stream:
               schema:
@@ -1664,19 +2367,25 @@ paths:
       tags:
       - Taxonomies
       summary: Get a taxonomy
+      description: Get details of a specific taxonomy. (TXY_GET_TAXONOMY_INFO)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        example: "TAX_GUID_12345"
       responses:
         '200':
-          description: Taxonomy info
+          description: Taxonomy information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaxonomyCreateObject'
+              example:
+                dTaxonomyGUID: "TAX_GUID_12345"
+                dTaxonomyName: "ProductCategories"
+                dDescription: "Product categorization taxonomy"
         '400':
           description: Bad Request
         '401':
@@ -1691,18 +2400,22 @@ paths:
       tags:
       - Taxonomies
       summary: Update a taxonomy
+      description: Update an existing taxonomy. (TXY_EDIT_TAXONOMY)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        example: "TAX_GUID_12345"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TaxonomyUpdateObject'
+            example:
+              dDescription: "Updated product categorization taxonomy"
       responses:
         '204':
           description: Taxonomy updated successfully
@@ -1720,6 +2433,7 @@ paths:
       tags:
       - Taxonomies
       summary: Delete a taxonomy
+      description: Delete a taxonomy and all its categories. (TXY_DELETE_TAXONOMY)
       parameters:
       - name: dTaxonomyGUID
         in: path
@@ -1727,6 +2441,7 @@ paths:
         schema:
           type: string
         description: Taxonomy GUID to delete
+        example: "TAX_GUID_12345"
       responses:
         '204':
           description: Taxonomy deleted successfully
@@ -1745,6 +2460,7 @@ paths:
       tags:
       - Taxonomies
       summary: Copy a category
+      description: Copy a category to another taxonomy or location. (TXY_COPY_CATEGORY)
       parameters:
       - name: dTaxonomyGUID
         in: path
@@ -1752,12 +2468,14 @@ paths:
         schema:
           type: string
         description: Source taxonomy GUID
+        example: "TAX_GUID_12345"
       - name: dCategoryGUID
         in: path
         required: true
         schema:
           type: string
         description: Source category GUID
+        example: "CAT_GUID_67890"
       requestBody:
         required: true
         content:
@@ -1776,6 +2494,10 @@ paths:
                   default: false
               required:
               - targetTaxonomyGUID
+            example:
+              targetTaxonomyGUID: "TAX_GUID_54321"
+              targetParentCategoryGUID: "CAT_GUID_11111"
+              includeSubcategories: true
       responses:
         '201':
           description: Category copied successfully
@@ -1794,9 +2516,10 @@ paths:
       tags:
       - System
       summary: PING server health check
+      description: Check if the WebCenter Content server is responding. (PING_SERVER)
       responses:
         '200':
-          description: Server is healthy
+          description: Server is healthy and responding
           content:
             application/json:
               schema:
@@ -1810,6 +2533,11 @@ paths:
                     format: date-time
                   version:
                     type: string
+              example:
+                status: "ok"
+                timestamp: "2024-01-15T14:30:00Z"
+                version: "12.2.1.4.0"
+                serverName: "ucm-server"
         '500':
           description: Server error
   /system/docProfiles:
@@ -1817,6 +2545,7 @@ paths:
       tags:
       - System
       summary: Get all document profiles information
+      description: Get a list of all document profiles/check-in forms. (GET_DOCPROFILES)
       parameters:
       - name: limit
         in: query
@@ -1825,6 +2554,7 @@ paths:
           type: integer
           default: 50
         description: Maximum number of results
+        example: 20
       - name: offset
         in: query
         required: false
@@ -1832,9 +2562,10 @@ paths:
           type: integer
           default: 0
         description: Pagination offset
+        example: 0
       responses:
         '200':
-          description: List of document profiles
+          description: List of document profiles retrieved successfully
           content:
             application/json:
               schema:
@@ -1846,6 +2577,15 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/DocProfileResponse'
+              example:
+                totalCount: 2
+                profiles:
+                  - dpName: "Standard"
+                    dpLabel: "Standard Check-in"
+                    dpIsDefault: true
+                  - dpName: "Contract"
+                    dpLabel: "Contract Check-in"
+                    dpIsDefault: false
         '204':
           description: No Content
         '400':
@@ -1860,6 +2600,7 @@ paths:
       tags:
       - System
       summary: Create document profile
+      description: Create a new document profile/check-in form. (ADD_DOCPROFILE)
       requestBody:
         required: true
         content:
@@ -1867,9 +2608,18 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dpName: "CustomProfile"
+              dpLabel: "Custom Check-in Form"
+              dpDescription: "Custom profile for special documents"
       responses:
         '201':
           description: Document profile created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              example: ".../documents/wcc/api/v1.1/system/docProfiles/CustomProfile"
         '400':
           description: Bad Request
         '401':
@@ -1883,19 +2633,26 @@ paths:
       tags:
       - System
       summary: Get document profile
+      description: Get details of a specific document profile. (GET_DOCPROFILE)
       parameters:
       - name: dpName
         in: path
         required: true
         schema:
           type: string
+        example: "Standard"
       responses:
         '200':
-          description: Profile
+          description: Document profile details retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocProfileResponse'
+              example:
+                dpName: "Standard"
+                dpLabel: "Standard Check-in"
+                dpIsDefault: true
+                dpFields: ["dDocTitle", "dDocType", "dSecurityGroup"]
         '400':
           description: Bad Request
         '401':
@@ -1908,12 +2665,14 @@ paths:
       tags:
       - System
       summary: Update document profile
+      description: Update an existing document profile. (EDIT_DOCPROFILE)
       parameters:
       - name: dpName
         in: path
         required: true
         schema:
           type: string
+        example: "Standard"
       requestBody:
         required: true
         content:
@@ -1921,9 +2680,12 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dpLabel: "Updated Standard Check-in"
+              dpDescription: "Updated description"
       responses:
         '204':
-          description: Updated
+          description: Document profile updated successfully
         '400':
           description: Bad Request
         '401':
@@ -1936,15 +2698,17 @@ paths:
       tags:
       - System
       summary: Delete document profile
+      description: Delete a document profile. (DELETE_DOCPROFILE)
       parameters:
       - name: dpName
         in: path
         required: true
         schema:
           type: string
+        example: "CustomProfile"
       responses:
         '204':
-          description: No Content
+          description: Document profile deleted successfully
         '400':
           description: Bad Request
         '401':
@@ -1958,35 +2722,47 @@ paths:
       tags:
       - System
       summary: Query data source
+      description: Query a WebCenter Content data source. (GET_DATASOURCE_QUERY)
       parameters:
       - name: dataSource
         in: path
         required: true
         schema:
           type: string
+        example: "SecurityGroups"
       - name: whereClause
         in: query
         schema:
           type: string
+        example: "dSecurityGroup <starts> `Public`"
       - name: orderClause
         in: query
         schema:
           type: string
+        example: "dSecurityGroup asc"
       - name: maxRows
         in: query
         schema:
           type: integer
+        example: 50
       - name: startRow
         in: query
         schema:
           type: integer
+        example: 0
       responses:
         '200':
-          description: Query result
+          description: Query results retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataSourceResponse'
+              example:
+                totalRows: 3
+                rows:
+                  - dSecurityGroup: "Public"
+                  - dSecurityGroup: "PublicNotListed"
+                  - dSecurityGroup: "PublicRestricted"
         '400':
           description: Bad Request
         '401':
@@ -2000,13 +2776,20 @@ paths:
       tags:
       - System
       summary: List document types
+      description: Get all document types configured in the system. (GET_DOCTYPES)
       responses:
         '200':
-          description: Doc types list
+          description: Document types list retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocTypeResponse'
+              example:
+                count: 3
+                items:
+                  - dDocType: "Document"
+                  - dDocType: "Contract"
+                  - dDocType: "Invoice"
         '204':
           description: No Content
         '400':
@@ -2021,6 +2804,7 @@ paths:
       tags:
       - System
       summary: Create document type
+      description: Create a new document type. (ADD_DOCTYPE)
       requestBody:
         required: true
         content:
@@ -2028,6 +2812,9 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dDocType: "Policy"
+              dDescription: "Company policy documents"
       responses:
         '201':
           description: Created
@@ -2044,12 +2831,14 @@ paths:
       tags:
       - System
       summary: Update document type
+      description: Update an existing document type. (EDIT_DOCTYPE)
       parameters:
       - name: dDocType
         in: path
         required: true
         schema:
           type: string
+        example: "Contract"
       requestBody:
         required: true
         content:
@@ -2057,9 +2846,11 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dDescription: "Updated contract documents description"
       responses:
         '204':
-          description: Updated
+          description: Document type updated successfully
         '400':
           description: Bad Request
         '401':
@@ -2072,15 +2863,17 @@ paths:
       tags:
       - System
       summary: Delete document type
+      description: Delete a document type. (DELETE_DOCTYPE)
       parameters:
       - name: dDocType
         in: path
         required: true
         schema:
           type: string
+        example: "Policy"
       responses:
         '204':
-          description: No Content
+          description: Document type deleted successfully
         '400':
           description: Bad Request
         '401':
@@ -2094,22 +2887,33 @@ paths:
       tags:
       - System
       summary: Get configuration info
+      description: Get system configuration information including doctypes, security groups, metadata fields. (DOC_INFO_BY_NAME)
       parameters:
       - name: rowLimit
         in: query
         schema:
           type: integer
+        example: 100
       - name: includeResultSets
         in: query
         schema:
           type: string
+        example: "DocTypes,SecurityGroups,DocMetaDefinition"
       responses:
         '200':
-          description: Configuration info
+          description: Configuration information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocConfigInfoResponse'
+              example:
+                DocTypes: ["Document", "Contract", "Invoice"]
+                SecurityGroups: ["Public", "Secure"]
+                DocMetaDefinition:
+                  - name: "dDocTitle"
+                    type: "text"
+                  - name: "dDocType"
+                    type: "option"
         '400':
           description: Bad Request
         '401':
@@ -2123,13 +2927,25 @@ paths:
       tags:
       - System
       summary: Get metadata fields info
+      description: Get information about all metadata fields in the system. (GET_DOC_META_INFO)
       responses:
         '200':
-          description: Metadata info
+          description: Metadata fields information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocMetaInfoResponse'
+              example:
+                fields:
+                  - fieldName: "dDocTitle"
+                    fieldType: "text"
+                    isRequired: true
+                  - fieldName: "dDocType"
+                    fieldType: "option"
+                    optionList: ["Document", "Contract"]
+                  - fieldName: "dSecurityGroup"
+                    fieldType: "option"
+                    isRequired: true
         '400':
           description: Bad Request
         '401':
@@ -2143,6 +2959,7 @@ paths:
       tags:
       - Workflow
       summary: Create a new workflow
+      description: Create a new workflow definition. (ADD_WORKFLOW)
       requestBody:
         required: true
         content:
@@ -2173,13 +2990,31 @@ paths:
               - dWfType
               - dWfDescription
               - dSecurityGroup
+            example:
+              dWfName: "ApprovalWorkflow"
+              dWfType: "Criteria"
+              dWfDescription: "Document approval workflow"
+              dSecurityGroup: "Public"
+              dWfCriteriaName: "dDocType"
+              dWfCriteriaValue: "Document"
       responses:
         '201':
-          description: Workflow created
+          description: Workflow created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of the created workflow
+              example: ".../documents/wcc/api/v1.1/workflows/ApprovalWorkflow"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowResponse'
+              example:
+                dWfName: "ApprovalWorkflow"
+                dWfType: "Criteria"
+                dWfDescription: "Document approval workflow"
+                dSecurityGroup: "Public"
         '400':
           description: Bad Request
         '401':
@@ -2193,19 +3028,28 @@ paths:
       tags:
       - Workflow
       summary: Get workflow information
+      description: Get details of a specific workflow definition. (GET_WORKFLOW_INFO)
       parameters:
       - name: dWfName
         in: path
         required: true
         schema:
           type: string
+        example: "ApprovalWorkflow"
       responses:
         '200':
-          description: Workflow information
+          description: Workflow information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowResponse'
+              example:
+                dWfName: "ApprovalWorkflow"
+                dWfType: "Criteria"
+                dWfDescription: "Document approval workflow"
+                dSecurityGroup: "Public"
+                dWfCriteriaName: "dDocType"
+                dWfCriteriaValue: "Document"
         '400':
           description: Bad Request
         '401':
@@ -2220,21 +3064,26 @@ paths:
       tags:
       - Workflow
       summary: Edit workflow
+      description: Update an existing workflow definition. (EDIT_WORKFLOW)
       parameters:
       - name: dWfName
         in: path
         required: true
         schema:
           type: string
+        example: "ApprovalWorkflow"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkflowUpdateRequest'
+            example:
+              dWfDescription: "Updated document approval workflow"
+              dWfCriteriaValue: "Contract"
       responses:
         '204':
-          description: Workflow updated
+          description: Workflow updated successfully
         '400':
           description: Bad Request
         '401':
@@ -2249,6 +3098,7 @@ paths:
       tags:
       - Workflow
       summary: Delete a workflow definition
+      description: Delete a workflow definition. (DELETE_WORKFLOW)
       parameters:
       - name: dWfName
         in: path
@@ -2256,6 +3106,7 @@ paths:
         schema:
           type: string
         description: Name of the workflow to delete
+        example: "ApprovalWorkflow"
       responses:
         '204':
           description: Workflow deleted successfully
@@ -2274,6 +3125,7 @@ paths:
       tags:
       - Workflow
       summary: Approve workflow for document
+      description: Approve the current workflow step for a document. (WF_APPROVE)
       parameters:
       - name: dDocName
         in: path
@@ -2281,9 +3133,24 @@ paths:
         schema:
           type: string
         description: dDocName of the document in workflow
+        example: "ID14006201"
+      - name: wfAction
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Workflow action to perform
+        example: "approve"
+      - name: wfComments
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Approval comments
+        example: "Approved for publication"
       responses:
         '204':
-          description: Workflow approved
+          description: Workflow approved successfully
         '400':
           description: Bad Request
         '401':
@@ -2299,6 +3166,7 @@ paths:
       tags:
       - Workflow
       summary: Reject workflow for document
+      description: Reject the current workflow step for a document. (WF_REJECT)
       parameters:
       - name: dDocName
         in: path
@@ -2306,15 +3174,24 @@ paths:
         schema:
           type: string
         description: dDocName of the document in workflow
+        example: "ID14006201"
       - name: rejectMessage
         in: query
         required: false
         schema:
           type: string
         description: The rejection message
+        example: "Needs more detail in section 3"
+      - name: wfAction
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Workflow action to perform
+        example: "reject"
       responses:
         '204':
-          description: Workflow rejected
+          description: Workflow rejected successfully
         '400':
           description: Bad Request
         '401':
@@ -2330,6 +3207,7 @@ paths:
       tags:
       - Workflow
       summary: Start a workflow instance
+      description: Start a workflow instance for a document. (WORKFLOW_START)
       parameters:
       - name: dWfName
         in: path
@@ -2337,6 +3215,7 @@ paths:
         schema:
           type: string
         description: Name of the workflow to start
+        example: "ApprovalWorkflow"
       requestBody:
         required: true
         content:
@@ -2363,6 +3242,12 @@ paths:
                   description: Workflow due date
               required:
               - dDocName
+            example:
+              dDocName: "ID14006201"
+              dWfUserList: "weblogic,sysadmin"
+              dWfInitialPriority: "High"
+              dWfStartDate: "2024-01-15T09:00:00Z"
+              dWfDueDate: "2024-01-20T17:00:00Z"
       responses:
         '201':
           description: Workflow started successfully
@@ -2370,6 +3255,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowResponse'
+              example:
+                dWfName: "ApprovalWorkflow"
+                dDocName: "ID14006201"
+                dWfStatus: "Active"
+                dWfCurrentStep: "Review"
         '400':
           description: Bad Request
         '401':
@@ -2383,6 +3273,7 @@ paths:
       tags:
       - Workflow
       summary: Cancel a workflow instance
+      description: Cancel an active workflow instance for a document. (WORKFLOW_CANCEL)
       parameters:
       - name: dWfName
         in: path
@@ -2390,12 +3281,14 @@ paths:
         schema:
           type: string
         description: Name of the workflow to cancel
+        example: "ApprovalWorkflow"
       - name: dDocName
         in: query
         required: true
         schema:
           type: string
         description: Document name associated with the workflow
+        example: "ID14006201"
       responses:
         '204':
           description: Workflow cancelled successfully
@@ -2414,12 +3307,15 @@ paths:
       tags:
       - Attachments
       summary: Add attachment to document
+      description: Upload an attachment (external rendition) to a document. (EDIT_RENDITIONS)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document to add attachment to
         schema:
           type: string
+        example: "ID14006201"
       requestBody:
         required: true
         content:
@@ -2443,39 +3339,65 @@ paths:
               required:
               - extRenditionName
               - extRenditionFile
+            example:
+              extRenditionName: "Thumbnail"
+              extRenditionDescription: "Document thumbnail image"
+              extRenditionFile: "[binary file content]"
       responses:
         '201':
-          description: Attachment created
+          description: Attachment created successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AttachmentResponse'
         '400':
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralErrorResponse'
   /files/{dDocName}/attachments/:
     get:
       tags:
       - Attachments
       summary: List attachments for document
+      description: Get all attachments (external renditions) for a document. (DOC_INFO_BY_NAME)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the document
         schema:
           type: string
+        example: "ID14006201"
       responses:
         '200':
-          description: Attachment list
+          description: Successfully returned attachment list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AttachmentListResponse'
+              example:
+                totalCount: 2
+                attachments:
+                  - attachmentId: "ATT001"
+                    fileName: "thumbnail.jpg"
+                    fileSize: 15360
+                    contentType: "image/jpeg"
+                  - attachmentId: "ATT002"
+                    fileName: "preview.pdf"
+                    fileSize: 524288
+                    contentType: "application/pdf"
         '400':
           description: Bad Request
         '401':
@@ -2500,12 +3422,14 @@ paths:
           type: string
         description: The IdcService to invoke (e.g., PING_SERVER, GET_SEARCH_RESULTS,
           DOC_INFO)
+        example: "PING_SERVER"
       - name: idcToken
         in: query
         required: false
         schema:
           type: string
         description: The unique token required when invoking non-scriptable IdcServices
+        example: "abc123def456"
       - name: OnErrorReturnBinder
         in: query
         required: false
@@ -2513,6 +3437,7 @@ paths:
           type: boolean
         description: When false, any error is returned as a GeneralErrorResponse;
           By default, the service binder is returned
+        example: false
       - name: IsJson
         in: query
         required: false
@@ -2520,6 +3445,7 @@ paths:
           type: boolean
         description: When true, the response is returned in a HDA-JSON format; By
           default, the response is created by converting the service binder to JSON
+        example: true
       responses:
         '200':
           description: Service executed successfully
@@ -2529,6 +3455,11 @@ paths:
                 type: object
                 additionalProperties: true
                 description: Service response varies by IdcService
+              example:
+                LocalData:
+                  StatusCode: "0"
+                  StatusMessage: "Pingserver successful."
+                  ServerName: "ucm-server"
         '400':
           description: Bad Request
         '401':
@@ -2607,6 +3538,7 @@ paths:
       tags:
       - Folders
       summary: Browse folder contents
+      description: Browse the contents of a specific folder. (FLD_BROWSE)
       parameters:
       - name: fFolderGUID
         in: path
@@ -2614,6 +3546,7 @@ paths:
         schema:
           type: string
         description: Folder GUID to browse
+        example: "FLD_USER:weblogic"
       - name: limit
         in: query
         required: false
@@ -2621,6 +3554,7 @@ paths:
           type: integer
           default: 50
         description: Maximum number of items to return
+        example: 20
       - name: offset
         in: query
         required: false
@@ -2628,12 +3562,14 @@ paths:
           type: integer
           default: 0
         description: Pagination offset
+        example: 0
       - name: orderBy
         in: query
         required: false
         schema:
           type: string
-        description: Sort order specification
+        description: Sort order specification (e.g., 'fFolderName asc')
+        example: "fFolderName asc"
       - name: includeSubfolders
         in: query
         required: false
@@ -2641,6 +3577,7 @@ paths:
           type: boolean
           default: false
         description: Include items from subfolders
+        example: false
       responses:
         '200':
           description: Folder contents retrieved successfully
@@ -2676,6 +3613,19 @@ paths:
                         dCreateDate:
                           type: string
                           format: date-time
+              example:
+                totalCount: 2
+                items:
+                  - fFolderGUID: "FLD_DOCS:Reports"
+                    fFolderName: "Reports"
+                    type: "folder"
+                    dCreateDate: "2024-01-15T10:30:00Z"
+                  - fFileGUID: "FFILE0000000000000001"
+                    dDocName: "ID14006201"
+                    dDocTitle: "Q4 Report"
+                    type: "file"
+                    dFileSize: 245632
+                    dCreateDate: "2024-01-20T14:45:00Z"
         '400':
           description: Bad Request
         '401':
@@ -2691,6 +3641,7 @@ paths:
       tags:
       - System
       summary: Get custom fields information
+      description: Get display field definitions for a page or document type. (GET_DISPLAY_FIELDS)
       parameters:
       - name: dDocType
         in: query
@@ -2698,6 +3649,7 @@ paths:
         schema:
           type: string
         description: Filter by document type
+        example: "Document"
       responses:
         '200':
           description: Custom fields information retrieved successfully
@@ -2731,6 +3683,23 @@ paths:
                           type: array
                           items:
                             type: string
+              example:
+                customFields:
+                  - fieldName: "xProjectCode"
+                    fieldLabel: "Project Code"
+                    fieldType: "text"
+                    isRequired: true
+                    defaultValue: ""
+                  - fieldName: "xDepartment"
+                    fieldLabel: "Department"
+                    fieldType: "option_list"
+                    isRequired: false
+                    defaultValue: "Engineering"
+                    optionList:
+                      - "Engineering"
+                      - "Finance"
+                      - "HR"
+                      - "Marketing"
         '400':
           description: Bad Request
         '401':
@@ -2744,6 +3713,7 @@ paths:
       tags:
       - System
       summary: Get permission information
+      description: Get current user permissions for entities. (GET_USER_PERMISSIONS)
       parameters:
       - name: entityType
         in: query
@@ -2756,12 +3726,14 @@ paths:
           - taxonomy
           - workflow
         description: Type of entity to get permissions for
+        example: "document"
       - name: entityId
         in: query
         required: false
         schema:
           type: string
         description: Entity ID
+        example: "ID14006201"
       responses:
         '200':
           description: Permission information retrieved successfully
@@ -2770,26 +3742,45 @@ paths:
               schema:
                 type: object
                 properties:
-                  permissions:
+                  dName:
+                    type: string
+                    description: Username
+                  securityGroups:
                     type: array
+                    description: Security groups the user has access to
                     items:
                       type: object
                       properties:
-                        dSecurityGroup:
+                        dGroupName:
                           type: string
-                        dUserName:
+                          description: Security group name
+                        privilege:
                           type: string
-                        permissionType:
+                          description: Privilege level (15=full access)
+                  userSecurityFlags:
+                    type: array
+                    description: User security flags and capabilities
+                    items:
+                      type: object
+                      properties:
+                        flag:
                           type: string
-                          enum:
-                          - read
-                          - write
-                          - delete
-                          - admin
-                        entityType:
+                          description: Security flag name
+                        value:
                           type: string
-                        entityId:
-                          type: string
+                          description: Flag value (1=true, 0=false)
+              example:
+                dName: "weblogic"
+                securityGroups:
+                  - dGroupName: "Public"
+                    privilege: "15"
+                  - dGroupName: "Secure"
+                    privilege: "15"
+                userSecurityFlags:
+                  - flag: "IsAdmin"
+                    value: "1"
+                  - flag: "IsContributor"
+                    value: "1"
         '400':
           description: Bad Request
         '401':
@@ -2803,6 +3794,7 @@ paths:
       tags:
       - System
       summary: Get OAuth access token
+      description: Obtain OAuth access token for API authentication. (OAUTH_TOKEN)
       requestBody:
         required: true
         content:
@@ -2843,6 +3835,13 @@ paths:
               - grant_type
               - client_id
               - client_secret
+            example:
+              grant_type: "password"
+              client_id: "myapp"
+              client_secret: "secret123"
+              username: "weblogic"
+              password: "password"
+              scope: "wcc.rest"
       responses:
         '200':
           description: OAuth token retrieved successfully
@@ -2879,6 +3878,7 @@ paths:
       tags:
       - Workflow
       summary: Get workflow revisions
+      description: Get all revisions for a workflow. (GET_WORKFLOW_REVISIONS)
       parameters:
       - name: dWfName
         in: path
@@ -2886,6 +3886,7 @@ paths:
         schema:
           type: string
         description: Name of the workflow
+        example: "ApprovalWorkflow"
       responses:
         '200':
           description: Workflow revisions retrieved successfully
@@ -2908,6 +3909,16 @@ paths:
                           type: string
                         dWfRevisionComments:
                           type: string
+              example:
+                revisions:
+                  - dWfRevisionID: "1"
+                    dWfRevisionDate: "2024-01-15T10:30:00Z"
+                    dWfRevisionAuthor: "weblogic"
+                    dWfRevisionComments: "Initial workflow setup"
+                  - dWfRevisionID: "2"
+                    dWfRevisionDate: "2024-01-16T14:20:00Z"
+                    dWfRevisionAuthor: "admin"
+                    dWfRevisionComments: "Updated approval steps"
         '400':
           description: Bad Request
         '401':
@@ -2923,6 +3934,7 @@ paths:
       tags:
       - Workflow
       summary: Remove document from workflow
+      description: Remove a document from a workflow. (WF_REMOVE_DOC)
       parameters:
       - name: dWfName
         in: path
@@ -2930,12 +3942,14 @@ paths:
         schema:
           type: string
         description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
         description: Document name to remove
+        example: "ID14006201"
       responses:
         '204':
           description: Document removed successfully
@@ -2960,11 +3974,15 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
+        description: Document name to add
+        example: "ID14006201"
       responses:
         '200': &id006
           description: Success
@@ -2977,18 +3995,22 @@ paths:
       - Attachments
       summary: Delete attachment from document
       description: Delete an attachment from a document. Note the double /files/ in
-        path is correct per Oracle documentation.
+        path is correct per Oracle documentation. (DELETE_RENDITIONS)
       parameters:
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
+        description: The dDocName of the document
+        example: "ID14006201"
       - name: extRenditionName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the external rendition to delete
+        example: "Thumbnail"
       responses:
         '204': *id004
         '400': *id001
@@ -3000,18 +4022,22 @@ paths:
       - Attachments
       summary: Delete attachment from document by dID
       description: Delete an attachment from a document by dID. Note the double /files/
-        in path is correct per Oracle documentation.
+        in path is correct per Oracle documentation. (DELETE_RENDITIONS)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
       - name: extRenditionName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the external rendition to delete
+        example: "Thumbnail"
       responses:
         '204': *id004
         '400': *id001
@@ -3021,33 +4047,76 @@ paths:
     get:
       tags:
       - Files
-      summary: Get document capabilities by dID
+      summary: Test document capabilities by dID
+      description: Test user capabilities on a document using revision ID. (DOC_INFO_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
+        description: The revision ID of the document to test
         schema:
           type: string
+        example: "10805"
+      - name: testedCapabilities
+        in: query
+        required: true
+        description: Comma-separated list of capabilities to test
+        schema:
+          type: string
+        example: "MOVE,COPY,DELETE"
       responses:
         '200':
-          description: Document capabilities
+          description: Successfully tested the revision capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+              example:
+                count: 3
+                items:
+                  - capabilityName: "MOVE"
+                    capabilityValue: 1
+                  - capabilityName: "COPY"
+                    capabilityValue: 1
+                  - capabilityName: "DELETE"
+                    capabilityValue: 1
         '400': *id001
         '401': *id002
+        '403':
+          description: User is not allowed to take this action
         '500': *id003
   /files/.by.did/{dID}/attachments/:
     get:
       tags:
       - Attachments
       summary: List attachments for document by dID
+      description: Get all attachments (external renditions) for a document by dID. (DOC_INFO_BY_ID)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
       responses:
         '200':
-          description: List of attachments
+          description: Successfully returned attachment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentListResponse'
+              example:
+                totalCount: 2
+                attachments:
+                  - attachmentId: "ATT001"
+                    fileName: "thumbnail.jpg"
+                    fileSize: 15360
+                    contentType: "image/jpeg"
+                  - attachmentId: "ATT002"
+                    fileName: "preview.pdf"
+                    fileSize: 524288
+                    contentType: "application/pdf"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3056,20 +4125,30 @@ paths:
       tags:
       - Attachments
       summary: Download attachment by dID
+      description: Download an attachment file by document dID and rendition name. (GET_FILE)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
       - name: extRenditionName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the external rendition to download
+        example: "Thumbnail"
       responses:
         '200':
           description: Attachment file content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '400': *id001
         '401': *id002
         '404': &id005
@@ -3080,20 +4159,30 @@ paths:
       tags:
       - Attachments
       summary: Download attachment
+      description: Download an attachment file by document name and rendition name. (GET_FILE)
       parameters:
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
+        description: The dDocName of the document
+        example: "ID14006201"
       - name: extRenditionName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the external rendition to download
+        example: "Thumbnail"
       responses:
         '200':
           description: Attachment file content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '400': *id001
         '401': *id002
         '404': *id005
@@ -3103,15 +4192,33 @@ paths:
       tags:
       - Files
       summary: Get taxonomies for document
+      description: Get all taxonomies associated with a document. (DOC_INFO_BY_NAME)
       parameters:
       - name: dDocName
         in: path
         required: true
         schema:
           type: string
+        description: The dDocName of the document
+        example: "ID14006201"
       responses:
         '200':
           description: Document taxonomies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taxonomies:
+                    type: array
+                    items:
+                      type: object
+              example:
+                taxonomies:
+                  - dTaxonomyGUID: "TAX001"
+                    dTaxonomyName: "Document Categories"
+                    dCategoryGUID: "CAT001"
+                    dCategoryName: "Financial Reports"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3127,6 +4234,8 @@ paths:
         required: true
         schema:
           type: string
+        description: The dDocName of the document
+        example: "ID14006201"
       responses:
         '200':
           description: Workflow information
@@ -3138,12 +4247,15 @@ paths:
       tags:
       - Attachments
       summary: Add attachment to document by dID
+      description: Upload an attachment (external rendition) to a document by dID. (EDIT_RENDITIONS)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
       requestBody:
         required: true
         content:
@@ -3151,9 +4263,23 @@ paths:
             schema:
               type: object
               properties:
-                primaryFile:
+                extRenditionName:
+                  type: string
+                  description: External rendition name (required)
+                extRenditionDescription:
+                  type: string
+                  description: External rendition description (optional)
+                extRenditionFile:
                   type: string
                   format: binary
+                  description: Attachment file (required)
+              required:
+                - extRenditionName
+                - extRenditionFile
+            example:
+              extRenditionName: "Thumbnail"
+              extRenditionDescription: "Document thumbnail image"
+              extRenditionFile: "[binary file content]"
       responses:
         '201': &id007
           description: Created
@@ -3165,12 +4291,27 @@ paths:
       tags:
       - Workflow
       summary: Approve workflow by dID
+      description: Approve the current workflow step for a document by dID. (WF_APPROVE)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dWfComments:
+                  type: string
+                  description: Approval comments
+            example:
+              dWfComments: "Approved - looks good"
       responses:
         '200': *id006
         '400': *id001
@@ -3181,12 +4322,27 @@ paths:
       tags:
       - Workflow
       summary: Reject workflow by dID
+      description: Reject the current workflow step for a document by dID. (WF_REJECT)
       parameters:
       - name: dID
         in: path
         required: true
         schema:
           type: string
+        description: The revision ID of the document
+        example: "10805"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dWfComments:
+                  type: string
+                  description: Rejection comments
+            example:
+              dWfComments: "Rejected - needs revision"
       responses:
         '200': *id006
         '400': *id001
@@ -3197,18 +4353,22 @@ paths:
       tags:
       - Files
       summary: Copy document revision
-      description: Copy a document revision. (COPY_DOC_REVISION)
+      description: Copy a document revision to create a new document. (COPY_DOC_REVISION)
       parameters:
       - name: dDocName
         in: path
         required: true
+        description: The dDocName of the source document
         schema:
           type: string
+        example: "COPYREVISION_SOURCE"
       - name: dID
         in: path
         required: true
+        description: The revision ID (dID) to copy
         schema:
           type: string
+        example: "6203"
       responses:
         '201': *id007
         '400': *id001
@@ -3226,44 +4386,83 @@ paths:
         required: false
         schema:
           type: string
+        description: Folder application identifier
+        example: "FldApp"
       - name: doCombinedBrowse
         in: query
         required: false
         schema:
           type: boolean
+          default: true
+        description: Combine folders and files in single list
+        example: true
       - name: foldersFirst
         in: query
         required: false
         schema:
           type: boolean
+          default: true
+        description: List folders before files
+        example: true
       - name: folderCount
         in: query
         required: false
         schema:
           type: integer
+        description: Maximum number of folders to return
+        example: 50
       - name: fileCount
         in: query
         required: false
         schema:
           type: integer
+        description: Maximum number of files to return
+        example: 50
       - name: combinedCount
         in: query
         required: false
         schema:
           type: integer
+        description: Maximum total items to return when doCombinedBrowse=true
+        example: 100
       - name: doMarkFavorites
         in: query
         required: false
         schema:
           type: boolean
+          default: true
+        description: Mark favorite items in results
+        example: true
       - name: doMarkSubscribed
         in: query
         required: false
         schema:
           type: boolean
+          default: true
+        description: Mark subscribed items in results
+        example: true
       responses:
         '200':
-          description: Folder contents
+          description: Root folder contents retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoldersSearchResultsResponse'
+              example:
+                count: 3
+                items:
+                  - fFolderGUID: "FLD_DOCS"
+                    fFolderName: "Documents"
+                    fFolderPath: "/Documents"
+                    type: "folder"
+                  - fFolderGUID: "FLD_USER:weblogic"
+                    fFolderName: "weblogic"
+                    fFolderPath: "/Contributors/weblogic"
+                    type: "folder"
+                  - fFileGUID: "FFILE0000000000000001"
+                    dDocName: "ID14006201"
+                    dDocTitle: "Sample Document"
+                    type: "file"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3272,15 +4471,37 @@ paths:
       tags:
       - Folders
       summary: Get file capabilities
+      description: Test one or more capabilities of the folder file against those that the logged in user has (FLD_FILE_TEST_CAPABILITY)
       parameters:
       - name: fFileGUID
         in: path
         required: true
         schema:
           type: string
+        example: "FFILE0000000000000001"
+      - name: testedCapabilities
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Comma-separated list of capabilities to test
+        example: "MOVE,COPY,DELETE"
       responses:
         '200':
-          description: File capabilities
+          description: File capabilities result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+              example:
+                count: 3
+                items:
+                  - capabilityName: "MOVE"
+                    capabilityValue: 1
+                  - capabilityName: "COPY"
+                    capabilityValue: 1
+                  - capabilityName: "DELETE"
+                    capabilityValue: 0
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3296,11 +4517,15 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dWfStepName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the workflow step
+        example: "ManagerReview"
       responses:
         '204': *id004
         '400': *id001
@@ -3317,11 +4542,15 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dWfStepName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the workflow step
+        example: "ManagerReview"
       requestBody:
         required: true
         content:
@@ -3329,6 +4558,10 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dWfStepType: "Review"
+              dWfStepInstructions: "Manager must review and approve document"
+              dWfStepNotifyUsers: "true"
       responses:
         '200': *id006
         '400': *id001
@@ -3346,11 +4579,15 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dWfStepName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the workflow step
+        example: "ManagerReview"
       requestBody:
         required: true
         content:
@@ -3358,6 +4595,9 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dAlias: "manager1"
+              dUserName: "John Smith"
       responses:
         '200': *id006
         '400': *id001
@@ -3375,14 +4615,20 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       - name: dWfStepName
         in: path
         required: true
         schema:
           type: string
+        description: Name of the workflow step
+        example: "ManagerReview"
       - name: dAlias
         in: path
         required: true
+        description: User alias to remove
+        example: "manager1"
         schema:
           type: string
       responses:
@@ -3400,18 +4646,48 @@ paths:
       - name: limit
         in: query
         required: false
+        description: The maximum number of items listed per page
         schema:
           type: integer
+        example: 50
       - name: offset
         in: query
         required: false
+        description: Specifies the point from which items are listed for the response
         schema:
           type: integer
+        example: 0
       responses:
         '200':
-          description: List of active workflows
+          description: Successfully returned the list of active workflows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowActiveResponse'
+              example:
+                count: 3
+                items:
+                  - dWfID: 2
+                    dWfName: "criteriawf1"
+                    dWfDescription: "Criteria Workflow1"
+                    dCompletionDate: null
+                    dSecurityGroup: "Public"
+                    dWfStatus: "INPROCESS"
+                    dWfType: "Criteria"
+                    dIsCollaboration: 0
+                  - dWfID: 201
+                    dWfName: "criteriawf2"
+                    dCompletionDate: null
+                    dSecurityGroup: "Public"
+                    dWfStatus: "INPROCESS"
+                    dWfType: "Criteria"
+                    dIsCollaboration: 0
+        '204':
+          description: There are no active standard workflows in the system
         '400': *id001
         '401': *id002
+        '403':
+          description: User is not allowed to take this action
         '500': *id003
   /workflows/inqueue/items:
     get:
@@ -3428,6 +4704,7 @@ paths:
           type: string
         description: Comma separated list of fields to be returned for each content
           item. By default, all fields will be returned.
+        example: "dDocName,dDocTitle,dWfStepName,dWfPriority"
       - name: orderBy
         in: query
         required: false
@@ -3436,6 +4713,7 @@ paths:
         description: The sort field and sort order which will be used to arrange
           the filtered content items. For example, dwfQueueLastActionTs:Desc will
           sort the specified field in descending order.
+        example: "dwfQueueLastActionTs:Desc"
       - name: limit
         in: query
         required: false
@@ -3444,12 +4722,14 @@ paths:
         description: The maximum number of items listed per page. If not provided,
           the limit is calculated from the config setting WfInqueueMaxRows. If neither
           are set, the default is 20.
+        example: 20
       - name: offset
         in: query
         required: false
         schema:
           type: integer
         description: Specifies the point from which items are listed for the response.
+        example: 0
       - name: doMarkSubscribed
         in: query
         required: false
@@ -3457,13 +4737,29 @@ paths:
           type: integer
         description: When 1 adds a fIsSubscribed field in the resultset to indicate
           if the folder is subscribed.
+        example: 1
       responses:
         '200':
-          description: Workflow in queue for the user
+          description: Workflow in queue items returned successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowInQueueResponse'
+              example:
+                totalResults: 2
+                count: 2
+                hasMore: false
+                items:
+                  - dDocName: "ID14006201"
+                    dDocTitle: "Contract Review"
+                    dWfStepName: "Review"
+                    dWfPriority: "High"
+                    dWfQueueLastActionTs: "2024-01-15T14:30:00Z"
+                  - dDocName: "ID14006202"
+                    dDocTitle: "Policy Update"
+                    dWfStepName: "Approval"
+                    dWfPriority: "Medium"
+                    dWfQueueLastActionTs: "2024-01-14T09:15:00Z"
         '204':
           description: The workflow in queue is empty
         '400': *id001
@@ -3476,10 +4772,30 @@ paths:
       tags:
       - Taxonomies
       summary: List all taxonomies
-      description: Get a list of all taxonomies. (GET_ALL_TAXONOMIES)
+      description: Get a list of all taxonomies. (TXY_GET_TAXONOMIES)
       responses:
         '200':
           description: List of taxonomies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalCount:
+                    type: integer
+                  taxonomies:
+                    type: array
+                    items:
+                      type: object
+              example:
+                totalCount: 2
+                taxonomies:
+                  - dTaxonomyGUID: "TAX001"
+                    dTaxonomyName: "Document Categories"
+                    dDescription: "Standard document classification"
+                  - dTaxonomyGUID: "TAX002"
+                    dTaxonomyName: "Project Types"
+                    dDescription: "Project classification taxonomy"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3488,26 +4804,52 @@ paths:
       tags:
       - Taxonomies
       summary: Search categories in taxonomy
-      description: Search categories within a taxonomy. (SEARCH_CATEGORIES)
+      description: Search categories within a taxonomy. (TXY_GET_TAXONOMY_CATEGORIES)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       - name: whereClause
         in: query
         required: false
         schema:
           type: string
+        description: SQL-like filter clause for categories
+        example: "dCategoryName LIKE '%Financial%'"
       - name: orderBy
         in: query
         required: false
         schema:
           type: string
+        description: Sort order specification
+        example: "dCategoryName:Asc"
       responses:
         '200':
           description: List of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalCount:
+                    type: integer
+                  categories:
+                    type: array
+                    items:
+                      type: object
+              example:
+                totalCount: 3
+                categories:
+                  - dCategoryGUID: "CAT001"
+                    dCategoryName: "Financial Reports"
+                    dDescription: "Financial documents"
+                  - dCategoryGUID: "CAT002"
+                    dCategoryName: "Financial Analysis"
+                    dDescription: "Analysis reports"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3516,21 +4858,35 @@ paths:
       tags:
       - Taxonomies
       summary: Get category details
-      description: Read a category. (GET_CATEGORY)
+      description: Read a category. (TXY_GET_CATEGORY_INFO)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       - name: dCategoryGUID
         in: path
         required: true
         schema:
           type: string
+        description: The category GUID
+        example: "CAT001"
       responses:
         '200':
           description: Category details
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                dCategoryGUID: "CAT001"
+                dCategoryName: "Financial Reports"
+                dDescription: "Financial documents and reports"
+                dParentCategoryGUID: null
+                dSecurityGroup: "Public"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3538,18 +4894,22 @@ paths:
       tags:
       - Taxonomies
       summary: Update category
-      description: Update a category. (UPDATE_CATEGORY)
+      description: Update a category. (TXY_EDIT_CATEGORY)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       - name: dCategoryGUID
         in: path
         required: true
         schema:
           type: string
+        description: The category GUID
+        example: "CAT001"
       requestBody:
         required: true
         content:
@@ -3557,6 +4917,10 @@ paths:
             schema:
               type: object
               additionalProperties: true
+            example:
+              dCategoryName: "Financial Reports - Updated"
+              dDescription: "Updated description for financial documents"
+              dSecurityGroup: "Public"
       responses:
         '200': *id006
         '400': *id001
@@ -3566,17 +4930,22 @@ paths:
       tags:
       - Taxonomies
       summary: Delete a category
+      description: Delete a category from a taxonomy. (TXY_DELETE_CATEGORY)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       - name: dCategoryGUID
         in: path
         required: true
         schema:
           type: string
+        description: The category GUID to delete
+        example: "CAT001"
       responses:
         '204':
           description: Category deleted successfully
@@ -3595,16 +4964,32 @@ paths:
       tags:
       - Taxonomies
       summary: Get security groups associated with taxonomy
-      description: Get the security groups associated with a taxonomy. (GET_TAXONOMY_SECURITY_GROUPS)
+      description: Get the security groups associated with a taxonomy. (TXY_GET_TAXONOMY_SECURITY_GROUPS)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       responses:
         '200':
           description: List of security groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  securityGroups:
+                    type: array
+                    items:
+                      type: string
+              example:
+                securityGroups:
+                  - "Public"
+                  - "Secure"
+                  - "Internal"
         '400': *id001
         '401': *id002
         '500': *id003
@@ -3613,13 +4998,15 @@ paths:
       tags:
       - Taxonomies
       summary: Add security group to taxonomy
-      description: Associate a taxonomy to a security group. (TAXONOMY_ADD_SECURITY_GROUP)
+      description: Associate a taxonomy to a security group. (TXY_ADD_TAXONOMY_TO_SECURITY_GROUP)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       requestBody:
         required: true
         content:
@@ -3631,6 +5018,8 @@ paths:
                   type: string
               required:
               - dSecurityGroup
+            example:
+              dSecurityGroup: "Public"
       responses:
         '200': *id006
         '400': *id001
@@ -3641,13 +5030,15 @@ paths:
       tags:
       - Taxonomies
       summary: Remove security group from taxonomy
-      description: Remove taxonomy from associated security group. (TAXONOMY_REMOVE_SECURITY_GROUP)
+      description: Remove taxonomy from associated security group. (TXY_REMOVE_TAXONOMY_FROM_SECURITY_GROUP)
       parameters:
       - name: dTaxonomyGUID
         in: path
         required: true
         schema:
           type: string
+        description: The taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       requestBody:
         required: true
         content:
@@ -3659,6 +5050,8 @@ paths:
                   type: string
               required:
               - dSecurityGroup
+            example:
+              dSecurityGroup: "Public"
       responses:
         '200': *id006
         '400': *id001
@@ -3669,13 +5062,15 @@ paths:
       tags:
       - System
       summary: Get taxonomies for security group
-      description: Get the associated taxonomies for a security group. (GET_SECURITY_GROUP_TAXONOMIES)
+      description: Get the associated taxonomies for a security group. (TXY_GET_SECURITY_GROUP_TAXONOMIES)
       parameters:
       - name: dSecurityGroup
         in: path
         required: true
         schema:
           type: string
+        description: The security group name
+        example: "Public"
       responses:
         '200':
           description: List of taxonomies
@@ -3687,29 +5082,40 @@ paths:
       tags:
       - Folders
       summary: Create a folder or shortcut
+      description: Create a new folder or shortcut in the folder structure. (FLD_CREATE_FOLDER)
       parameters:
       - name: fParentGUID
         in: query
         required: true
         schema:
           type: string
+        description: Parent folder GUID where the new folder will be created
+        example: "ROOT_FOLDER_GUID"
       - name: fFolderName
         in: query
         required: true
         schema:
           type: string
+        description: Name of the new folder
+        example: "New Project Folder"
       - name: fTargetGUID
         in: query
         schema:
           type: string
+        description: Target folder GUID (used when creating shortcuts)
+        example: "TARGET_FOLDER_GUID"
       - name: ConflictResolutionMethod
         in: query
         schema:
           type: string
+        description: How to handle conflicts (e.g., "OVERWRITE", "CREATEUNIQUE")
+        example: "CREATEUNIQUE"
       - name: isForceInheritSecurityForFolderCreation
         in: query
         schema:
           type: boolean
+        description: Force security inheritance from parent folder
+        example: true
       responses:
         '201':
           description: Folder created
@@ -3728,15 +5134,26 @@ paths:
       tags:
       - Taxonomies
       summary: Create a taxonomy
+      description: Create a new taxonomy. (TXY_CREATE_TAXONOMY)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TaxonomyCreateObject'
+            example:
+              dTaxonomyName: "Project Categories"
+              dDescription: "Classification taxonomy for projects"
+              dSecurityGroup: "Public"
       responses:
         '201':
           description: Taxonomy created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of the created taxonomy
+              example: "/documents/wcc/api/v1.1/taxonomies/TAX003"
         '400':
           description: Bad Request
         '401':
@@ -3750,6 +5167,7 @@ paths:
       tags:
       - Taxonomies
       summary: Create a category
+      description: Create a new category in a taxonomy. (TXY_CREATE_CATEGORY)
       parameters:
       - name: dTaxonomyGUID
         in: path
@@ -3757,6 +5175,7 @@ paths:
         schema:
           type: string
         description: Taxonomy GUID
+        example: "A746D984C500F280923C36033F14D63D"
       requestBody:
         required: true
         content:
@@ -3775,6 +5194,10 @@ paths:
                   description: Parent category GUID (optional)
               required:
               - dCategoryName
+            example:
+              dCategoryName: "Engineering"
+              dCategoryDescription: "Engineering documents and specifications"
+              dParentCategoryGUID: null
       responses:
         '201':
           description: Category created successfully
@@ -3798,6 +5221,8 @@ paths:
         required: true
         schema:
           type: string
+        description: Name of the workflow
+        example: "ApprovalWorkflow"
       requestBody:
         required: true
         content:
@@ -3868,18 +5293,448 @@ components:
   schemas:
     GeneralErrorResponse:
       type: object
-      additionalProperties: true
+      description: General error response
+      properties:
+        type:
+          type: string
+          description: A link that describes the type of error
+        title:
+          type: string
+          description: A brief summary error message
+        detail:
+          type: string
+          description: Details about the error from the server (the service StatusMessage)
+        errorKey:
+          type: string
+          description: When the error comes from the service layer, the service StatusMessageKey
+        o:errorCode:
+          type: integer
+          description: When the error comes from the service layer, the service StatusCode
     WorkInProgressResponse:
       type: object
-      additionalProperties: true
+      description: The response returning work in progress
+      properties:
+        count:
+          type: integer
+          description: The number of documents returned
+        hasMore:
+          type: boolean
+          description: When false, all the results are returned
+        offset:
+          type: integer
+          description: The offset when used to return a limited number of search results
+        totalResults:
+          type: integer
+          description: The total number of documents that satisfy the search
+        limit:
+          type: integer
+          description: The maximum number of items listed
+        orderBy:
+          type: string
+          description: The sort field and sort order used to generate this response
+        pageNumber:
+          type: integer
+          description: The page number of items in the response (useful in pagination)
+        repository:
+          type: string
+          description: The name of the repository
+        computedSearchEngineName:
+          type: string
+          description: The name of the search engine
+        items:
+          type: array
+          description: An array of metadata objects for documents that are in work in progress
+          items:
+            $ref: '#/components/schemas/MetadataObjectResponse'
     MetadataChangeObjectParameter:
       type: object
+      description: Metadata fields that can be changed for a content item
+      properties:
+        dDocType:
+          type: string
+          description: The type of document
+        dDocTitle:
+          type: string
+          description: The title of the document
+        dRevLabel:
+          type: string
+          description: The revision of the document
+        dSecurityGroup:
+          type: string
+          description: The security group of the document
+        dDocName:
+          type: string
+          description: The id of the document
+        dDocAuthor:
+          type: string
+          description: The author of the document
+        xComments:
+          type: string
+          description: String comments about the document
       additionalProperties: true
+      example:
+        dDocTitle: "Updated Title"
+        dSecurityGroup: "Public"
+        xComments: "Updated via REST API"
     CapabilitiesResponse:
       type: object
-      additionalProperties: true
+      description: The response describing user capabilities on an object
+      properties:
+        count:
+          type: integer
+          description: The number of capabilities returned
+        items:
+          type: array
+          description: An array of capability objects
+          items:
+            $ref: '#/components/schemas/CapabilitiesObject'
+    CapabilitiesObject:
+      type: object
+      description: A single capability test result
+      properties:
+        capabilityName:
+          type: string
+          description: The name of the capability tested
+        capabilityValue:
+          type: integer
+          description: "-1=does not apply, 0=does not have capability, 1=has capability"
     SearchResponse:
       type: object
+      description: Legacy placeholder - use SearchResultsResponse instead
+      additionalProperties: true
+    SearchResultsResponse:
+      type: object
+      description: The response returning search results
+      properties:
+        count:
+          type: integer
+          description: The number of documents returned
+        hasMore:
+          type: boolean
+          description: When false, all the results for the search are returned
+        offset:
+          type: integer
+          description: The offset when used to return a limited number of search results
+        totalResults:
+          type: integer
+          description: The total number of documents that satisfy the search
+        limit:
+          type: integer
+          description: The maximum number of items listed
+        q:
+          type: string
+          description: The search query used to generate this response
+        orderBy:
+          type: string
+          description: The sort field and sort order used to generate this response
+        pageNumber:
+          type: integer
+          description: The page number of items in the response (useful in pagination)
+        numPages:
+          type: integer
+          description: The total number of pages returned
+        totalRows:
+          type: integer
+          description: The total number of rows returned
+        startRow:
+          type: integer
+          description: The start row number of items returned
+        endRow:
+          type: integer
+          description: The end row number of items returned
+        items:
+          type: array
+          description: An array of metadata objects for documents that meet the search query
+          items:
+            $ref: '#/components/schemas/MetadataObjectResponse'
+    MetadataObjectResponse:
+      type: object
+      description: Metadata for a content item - fields returned vary by server configuration
+      properties:
+        dDocName:
+          type: string
+          description: The id of the document
+        dID:
+          type: integer
+          description: The revision ID
+        dDocType:
+          type: string
+          description: The type of document
+        dDocTitle:
+          type: string
+          description: The title of the document
+        dRevLabel:
+          type: string
+          description: The revision of the document
+        dSecurityGroup:
+          type: string
+          description: The security group of the document
+        dDocAuthor:
+          type: string
+          description: The author of the document
+        dStatus:
+          type: string
+          description: This field is a summary field of computations from other status fields
+        dOriginalName:
+          type: string
+          description: The document file name
+        dFormat:
+          type: string
+          description: The document mime type
+        dFileSize:
+          type: integer
+          description: The document filesize (in bytes)
+        dDocCreatedDate:
+          type: string
+          format: date-time
+          description: The date and time the document was first uploaded into the server in ISO-8601 format
+        dDocCreator:
+          type: string
+          description: The user who originally created the document
+        dDocLastModifiedDate:
+          type: string
+          format: date-time
+          description: The date and time any revision of the document was last modified in ISO-8601 format
+        dDocLastModifier:
+          type: string
+          description: The last user to modify the document
+        dIndexedID:
+          type: integer
+          description: The indexed document ID
+        dDocOwner:
+          type: string
+          description: The document owner
+        URL:
+          type: string
+          description: The relative URL to access the document
+        dInDate:
+          type: string
+          format: date-time
+          description: The date the document was indexed into the system
+        dWebExtension:
+          type: string
+          description: The web viewable extension
+        dExtension:
+          type: string
+          description: The file extension
+        dCreateDate:
+          type: string
+          format: date-time
+          description: The create date of this revision
+        dRevClassID:
+          type: integer
+          description: The revision class ID
+        dRevisionID:
+          type: integer
+          description: The revision ID number
+        VaultFileSize:
+          type: integer
+          description: The file size in the vault
+      additionalProperties: true
+    MetadataVersionsResponse:
+      type: object
+      description: The response returning the metadata for all versions of a document
+      properties:
+        dDocName:
+          type: string
+          description: The id of the document
+        count:
+          type: integer
+          description: The number of versions returned
+        dRevLabelLatest:
+          type: string
+          description: The latest revision of this document
+        items:
+          type: array
+          description: An array of metadata objects for each revision
+          items:
+            $ref: '#/components/schemas/MetadataObjectResponse'
+    FoldersSearchResultsResponse:
+      type: object
+      description: The response returning search results for items in folders
+      properties:
+        count:
+          type: integer
+          description: The number of documents returned
+        hasMore:
+          type: boolean
+          description: When false, all the results for the search were returned
+        offset:
+          type: integer
+          description: The offset when used to return a limited number of search results
+        totalResults:
+          type: integer
+          description: The total number of documents that satisfy the search
+        totalCount:
+          type: integer
+          description: The total count of items
+        limit:
+          type: integer
+          description: The maximum number of items listed
+        q:
+          type: string
+          description: The search query used to generate this response
+        orderBy:
+          type: string
+          description: The sort field and sort order used to generate this response
+        startRow:
+          type: integer
+          description: The start row number of items returned
+        endRow:
+          type: integer
+          description: The end row number of items returned
+        nextRow:
+          type: integer
+          description: The number of the next row in the query
+        itemType:
+          type: string
+          description: "The item type: 1=folder, 2=file, 3=document"
+        dataSource:
+          type: string
+          description: The dataSource used for generating search results
+        searchEngineName:
+          type: string
+          description: The name of search engine used
+        items:
+          type: array
+          description: An array of metadata objects for folders/files that meet the search query
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/FolderInfoObject'
+              - $ref: '#/components/schemas/FileInfoObject'
+    FolderInfoObject:
+      type: object
+      description: Folder information
+      properties:
+        fFolderGUID:
+          type: string
+          description: The folder GUID
+        fParentGUID:
+          type: string
+          description: The GUID of the parent folder
+        fFolderName:
+          type: string
+          description: The folder name
+        fFolderType:
+          type: string
+          description: "The folder type: owner=created folders, soft=shortcuts"
+        fInhibitPropagation:
+          type: integer
+          description: Bitmap for propagation restrictions (0=none, 1=metadata, 16=security, 17=both)
+        fPromptForMetadata:
+          type: integer
+          description: Indicates how to prompt for metadata (0=no prompt needed)
+        fIsContribution:
+          type: integer
+          description: When 1, items can be contributed to the folder
+        fIsInTrash:
+          type: integer
+          description: When 1, the folder is in the trash
+        fRealItemGUID:
+          type: string
+          description: The folder actual GUID
+        fLibraryType:
+          type: integer
+          description: "Library type: 0=not library, 1=enterprise, 2=application, 3=system"
+        fIsLibrary:
+          type: integer
+          description: When 1, the folder is a Library Folder
+        fTargetGUID:
+          type: string
+          description: If the folder is a shortcut, the target GUID
+        fOwner:
+          type: string
+          description: The owner of the folder
+        fCreator:
+          type: string
+          description: The creator of the folder
+        fLastModifier:
+          type: string
+          description: The last modifier on the folder
+        fCreateDate:
+          type: string
+          format: date-time
+          description: The date the folder was created in ISO-8601 format
+        fLastModifiedDate:
+          type: string
+          format: date-time
+          description: The date the folder was modified in ISO-8601 format
+        fSecurityGroup:
+          type: string
+          description: The folder security group
+        fChildFoldersCount:
+          type: integer
+          description: The number of folders in the folder
+        fChildFilesCount:
+          type: integer
+          description: The number of files in the folder
+        fFolderSize:
+          type: integer
+          description: The number of bytes the folder uses
+        fDisplayName:
+          type: string
+          description: The folder display name
+        itemType:
+          type: string
+          description: "The folder type: 1=folder, 2=file, 3=document"
+        folderPermissions:
+          type: string
+          description: "User permissions on the folder: R=read, W=write, D=delete, A=access"
+      additionalProperties: true
+    FileInfoObject:
+      type: object
+      description: File information and metadata - includes fields from MetadataObjectResponse
+      properties:
+        fFileGUID:
+          type: string
+          description: The file GUID
+        fParentGUID:
+          type: string
+          description: The parent GUID of the file
+        fTargetGUID:
+          type: string
+          description: The GUID of the target file
+        fFileName:
+          type: string
+          description: The file name of the file
+        fPublishedFileName:
+          type: string
+          description: The file name when published
+        fFolderType:
+          type: string
+          description: "The folder type: owner=created, soft=shortcuts"
+        fIsInTrash:
+          type: integer
+          description: When 1, the file is in the trash
+        fRealItemGUID:
+          type: string
+          description: The actual file GUID
+        fOwner:
+          type: string
+          description: The owner of the file
+        fCreator:
+          type: string
+          description: The creator of the file
+        fLastModifier:
+          type: string
+          description: The last modifier of the file
+        fCreateDate:
+          type: string
+          format: date-time
+          description: The date the file was created in ISO-8601 format
+        fLastModifiedDate:
+          type: string
+          format: date-time
+          description: The date the file was modified in ISO-8601 format
+        fSecurityGroup:
+          type: string
+          description: The file security group
+        dDocName:
+          type: string
+          description: The document name (if file is linked to document)
+        dID:
+          type: integer
+          description: The document revision ID
       additionalProperties: true
     PublicLinkObject:
       type: object
@@ -3945,10 +5800,81 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowResponse'
+    WorkflowActiveResponse:
+      type: object
+      description: The response for active workflows
+      properties:
+        count:
+          type: integer
+          description: The number of active workflows
+        items:
+          type: array
+          description: An array of active workflows
+          items:
+            $ref: '#/components/schemas/WorkflowObject'
+    WorkflowObject:
+      type: object
+      description: The fields that describe a workflow
+      properties:
+        dWfID:
+          type: integer
+          description: Unique counter id of the workflow
+        dWfName:
+          type: string
+          description: User assigned name of the workflow
+        dWfDescription:
+          type: string
+          description: Description of the Workflow
+        dCompletionDate:
+          type: string
+          format: date-time
+          description: Date workflow last reached completion and all docs were released to web in ISO-8601 format
+        dSecurityGroup:
+          type: string
+          description: Security Group the workflow belongs to (dSecurityGroup)
+        dWfStatus:
+          type: string
+          description: "State of the workflow: INIT=not started/inactive, INPROCESS=active"
+        dWfType:
+          type: string
+          description: "Type of the workflow: Basic, Criteria, Sub-workflow"
+        dProjectID:
+          type: string
+          description: If set this workflow is a staging workflow
+        dIsCollaboration:
+          type: integer
+          description: When 1 the workflow is related to Collaboration Project
     WorkflowInQueueResponse:
       type: object
-      additionalProperties: true
-      description: Response containing the user's current workflow assignments
+      description: The response for the workflow in queue (user's current workflow assignments)
+      properties:
+        count:
+          type: integer
+          description: The number of items returned
+        hasMore:
+          type: boolean
+          description: If false all items have been returned
+        numPages:
+          type: integer
+          description: The number of pages the queue items can be returned
+        pageNumber:
+          type: integer
+          description: The page number of the search results returned
+        totalRows:
+          type: integer
+          description: The total number of workflow items in queue for the user
+        startRow:
+          type: integer
+          description: The start row in the workflow queue
+        endRow:
+          type: integer
+          description: The last row in the workflow queue
+        items:
+          type: array
+          description: Composite of WorkflowInQueueObject, WorkflowStepObject, and MetadataObjectResponse fields
+          items:
+            type: object
+            additionalProperties: true
     WorkflowResponse:
       type: object
       properties:
